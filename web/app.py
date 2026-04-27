@@ -325,7 +325,7 @@ def index():
     if not state.get("last_image_path"):
         state["last_image_path"] = latest_image["path"]
 
-    latest = read_latest_values()
+    latest = latest = state.get("climate", {})
 
     return render_template(
         "index.html",
