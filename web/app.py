@@ -422,7 +422,15 @@ def config_page():
                 sensor_value = parse_float(form.get(f"sensor_{i}_{sensor_key}"))
                 if sensor_value is not None:
                     base[sensor_key] = int(sensor_value)
+                    
+        config["light_sensor"]["name"] = form.get("light_sensor_name", config["light_sensor"]["name"])
+        config["light_sensor"]["enabled"] = form.get("light_sensor_enabled") == "on"
 
+        for key in ["channel", "calibration_raw_dark", "calibration_raw_bright"]:
+            value = parse_float(form.get(f"light_sensor_{key}"))
+            if value is not None:
+                config["light_sensor"][key] = int(value)
+            
             sensors.append(base)
 
         config["soil_sensors"] = sensors
