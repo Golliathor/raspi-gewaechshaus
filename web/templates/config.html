@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Konfiguration</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7f5; color: #1f2937; }
+    header { background: #1f7a4d; color: white; padding: 16px 20px; }
+    main { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    label { display: block; font-size: 0.95rem; margin-bottom: 4px; }
+    input[type="text"], input[type="number"], input[type="time"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+    }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; background: #1f7a4d; color: white; }
+    a { color: #1f7a4d; text-decoration: none; }
+    .sensor-block { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="margin:0;">Konfiguration</h1>
+  </header>
+
+  <main>
+    <form method="post">
+      <div class="card">
+        <h2>Allgemein</h2>
+        <div class="grid">
+          <div>
+            <label>Name</label>
+            <input name="greenhouse_name" type="text" value="{{ config.greenhouse_name }}">
+          </div>
+          <div>
+            <label>Status-Refresh (s)</label>
+            <input name="refresh_seconds" type="number" value="{{ config.refresh_seconds }}">
+          </div>
+          <div>
+            <label>Chart-Refresh (s)</label>
+            <input name="chart_refresh_seconds" type="number" value="{{ config.chart_refresh_seconds }}">
+          </div>
+          <div>
+            <label>Diagramm-Punkte</label>
+            <input name="chart_points" type="number" value="{{ config.chart_points }}">
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
+          <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
+          <label><input type="checkbox" name="pcf8591_enabled" {% if config.pcf8591_enabled %}checked{% endif %}> PCF8591 aktiv</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Bewässerung</h2>
+        <div class="grid">
+          <div>
+            <label>Normale Gießdauer (s)</label>
+            <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
+          </div>
+          <div>
+            <label>Fallback täglich (s)</label>
+            <input name="watering_fallback_seconds" type="number" value="{{ config.watering_fallback_seconds }}">
+          </div>
+          <div>
+            <label>Sensor-Intervall (s)</label>
+            <input name="sensor_read_interval_seconds" type="number" value="{{ config.sensor_read_interval_seconds }}">
+          </div>
+          <div>
+            <label>Bewässerungs-Prüfintervall (s)</label>
+            <input name="watering_check_interval_seconds" type="number" value="{{ config.watering_check_interval_seconds }}">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Lüfter</h2>
+        <div class="grid">
+          <div><label>Abluft Temp EIN</label><input name="exhaust_temp_on_c" type="number" step="0.1" value="{{ config.exhaust_temp_on_c }}"></div>
+          <div><label>Abluft Temp AUS</label><input name="exhaust_temp_off_c" type="number" step="0.1" value="{{ config.exhaust_temp_off_c }}"></div>
+          <div><label>Abluft Feuchte EIN</label><input name="exhaust_humidity_on" type="number" step="0.1" value="{{ config.exhaust_humidity_on }}"></div>
+          <div><label>Abluft Feuchte AUS</label><input name="exhaust_humidity_off" type="number" step="0.1" value="{{ config.exhaust_humidity_off }}"></div>
+
+          <div><label>Umluft Temp EIN</label><input name="circulation_temp_on_c" type="number" step="0.1" value="{{ config.circulation_temp_on_c }}"></div>
+          <div><label>Umluft Temp AUS</label><input name="circulation_temp_off_c" type="number" step="0.1" value="{{ config.circulation_temp_off_c }}"></div>
+          <div><label>Umluft Feuchte EIN</label><input name="circulation_humidity_on" type="number" step="0.1" value="{{ config.circulation_humidity_on }}"></div>
+          <div><label>Umluft Feuchte AUS</label><input name="circulation_humidity_off" type="number" step="0.1" value="{{ config.circulation_humidity_off }}"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>PCF8591</h2>
+        <div class="grid">
+          <div>
+            <label>I2C-Adresse (dezimal)</label>
+            <input name="pcf8591_address" type="number" value="{{ config.pcf8591_address }}">
+          </div>
+        </div>
+
+        {% for sensor in config.soil_sensors %}
+        <div class="sensor-block">
+          <h3>Sensor {{ loop.index }}</h3>
+          <div class="grid">
+            <div>
+              <label>Name</label>
+              <input name="sensor_{{ loop.index0 }}_name" type="text" value="{{ sensor.name }}">
+            </div>
+            <div>
+              <label>Kanal</label>
+              <input name="sensor_{{ loop.index0 }}_channel" type="number" min="0" max="3" value="{{ sensor.channel }}">
+            </div>
+            <div>
+              <label>Trocken unter (%)</label>
+              <input name="sensor_{{ loop.index0 }}_dry_below_percent" type="number" value="{{ sensor.dry_below_percent }}">
+            </div>
+            <div>
+              <label>Kalibrierung trocken (raw)</label>
+              <input name="sensor_{{ loop.index0 }}_calibration_raw_dry" type="number" value="{{ sensor.calibration_raw_dry }}">
+            </div>
+            <div>
+              <label>Kalibrierung nass (raw)</label>
+              <input name="sensor_{{ loop.index0 }}_calibration_raw_wet" type="number" value="{{ sensor.calibration_raw_wet }}">
+            </div>
+          </div>
+          <label style="margin-top:10px;"><input type="checkbox" name="sensor_{{ loop.index0 }}_enabled" {% if sensor.enabled %}checked{% endif %}> Sensor aktiv</label>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="card">
+        <h2>Zeitraffer</h2>
+        <div class="grid">
+          <div><label>Morgens</label><input name="timelapse_morning" type="time" value="{{ config.timelapse_morning }}"></div>
+          <div><label>Mittags</label><input name="timelapse_noon" type="time" value="{{ config.timelapse_noon }}"></div>
+          <div><label>Abends</label><input name="timelapse_evening" type="time" value="{{ config.timelapse_evening }}"></div>
+        </div>
+      </div>
+
+ <div class="card">
+  <h2>Kamera</h2>
+
+  <div style="margin-top:12px;">
+    <label><input type="checkbox" name="camera_enabled" {% if config.camera_enabled %}checked{% endif %}> Kamera aktiv</label><br>
+    <label><input type="checkbox" name="camera_hflip" {% if config.camera_hflip %}checked{% endif %}> Horizontal spiegeln</label><br>
+    <label><input type="checkbox" name="camera_vflip" {% if config.camera_vflip %}checked{% endif %}> Vertikal spiegeln</label>
+  </div>
+
+  <div class="grid" style="margin-top:12px;">
+    <div>
+      <label>Bildordner</label>
+      <input name="camera_image_dir" type="text" value="{{ config.camera_image_dir }}">
+    </div>
+
+    <div>
+      <label>Dateinamensmuster</label>
+      <input name="camera_filename_pattern" type="text" value="{{ config.camera_filename_pattern }}">
+    </div>
+
+    <div>
+      <label>Breite</label>
+      <input name="camera_width" type="number" value="{{ config.camera_width }}">
+    </div>
+
+    <div>
+      <label>Höhe</label>
+      <input name="camera_height" type="number" value="{{ config.camera_height }}">
+    </div>
+
+    <div>
+      <label>Qualität</label>
+      <input name="camera_quality" type="number" min="1" max="100" value="{{ config.camera_quality }}">
+    </div>
+
+    <div>
+      <label>Rotation</label>
+      <input name="camera_rotation" type="number" value="{{ config.camera_rotation }}">
+    </div>
+
+    <div>
+      <label>Kamera-Timeout (ms)</label>
+      <input name="camera_timeout_ms" type="number" value="{{ config.camera_timeout_ms }}">
+    </div>
+  </div>
+</div>
+ <div class="card">     
+         <button type="submit">Speichern</button>
+         <a href="/" style="margin-left: 12px;">Zurück zum Dashboard</a>
+ </div>
+
+
+    </form>
+  </main>
+</body>
+</html>

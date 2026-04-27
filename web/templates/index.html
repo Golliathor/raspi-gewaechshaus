@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ config.greenhouse_name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7f5; color: #1f2937; }
+    header { background: #1f7a4d; color: white; padding: 16px 20px; }
+    nav a { color: white; margin-right: 14px; text-decoration: none; }
+    main { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+    .value { font-size: 2rem; font-weight: bold; margin-top: 8px; }
+    .muted { color: #6b7280; }
+    .chart-card { margin-top: 16px; }
+    .relay-grid, .sensor-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 12px; }
+    .relay-box, .sensor-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fafafa; }
+    .status-on { color: #166534; font-weight: bold; }
+    .status-off { color: #991b1b; font-weight: bold; }
+    .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; background: #1f7a4d; color: white; }
+    button.secondary { background: #6b7280; }
+    input[type="number"] { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; width: 100px; }
+    .meta { margin-top: 10px; font-size: 0.9rem; color: #6b7280; }
+    canvas { width: 100% !important; height: 380px !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="margin:0 0 8px 0;">{{ config.greenhouse_name }}</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/config">Konfiguration</a>
+      <a href="/calibration">Kalibrierung</a>
+      <a href="/api/status">JSON API</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="grid">
+      <div class="card">
+        <div class="muted">Aktuelle Temperatur</div>
+        <div class="value" id="tempValue">{{ '%.1f'|format(latest.temperature_c) if latest.temperature_c is not none else '--' }} °C</div>
+      </div>
+      <div class="card">
+        <div class="muted">Aktuelle Luftfeuchte</div>
+        <div class="value" id="humValue">{{ '%.1f'|format(latest.humidity_percent) if latest.humidity_percent is not none else '--' }} %</div>
+      </div>
+      <div class="card">
+        <div class="muted">Letzte Messung</div>
+        <div class="value" style="font-size: 1.2rem;" id="timeValue">{{ latest.label or 'Keine Daten' }}</div>
+        <div class="meta">
+          Status-Refresh: {{ config.refresh_seconds }} s<br>
+          Chart-Refresh: {{ config.chart_refresh_seconds }} s
+        </div>
+      </div>
+      <div class="card">
+        <div class="muted">Automatik</div>
+        <div class="value" style="font-size: 1.4rem;" id="automationState">
+          {{ "AKTIV" if state.automation_active else "AUS" }}
+        </div>
+        <div class="button-row">
+          <button onclick="toggleAutomation(true)">EIN</button>
+          <button class="secondary" onclick="toggleAutomation(false)">AUS</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <h2>Relaisstatus</h2>
+      <div class="relay-grid">
+        <div class="relay-box">
+          <div class="muted">Abluft</div>
+          <div id="relayExhaust" class="{{ 'status-on' if relay_states.exhaust else 'status-off' }}">{{ "AN" if relay_states.exhaust else "AUS" }}</div>
+          <div class="button-row">
+            <button onclick="setRelay('exhaust', true)">AN</button>
+            <button class="secondary" onclick="setRelay('exhaust', false)">AUS</button>
+          </div>
+        </div>
+        <div class="relay-box">
+          <div class="muted">Umluft</div>
+          <div id="relayCirculation" class="{{ 'status-on' if relay_states.circulation else 'status-off' }}">{{ "AN" if relay_states.circulation else "AUS" }}</div>
+          <div class="button-row">
+            <button onclick="setRelay('circulation', true)">AN</button>
+            <button class="secondary" onclick="setRelay('circulation', false)">AUS</button>
+          </div>
+        </div>
+        <div class="relay-box">
+          <div class="muted">Wasserventil</div>
+          <div id="relayWater" class="{{ 'status-on' if relay_states.water_valve else 'status-off' }}">{{ "AN" if relay_states.water_valve else "AUS" }}</div>
+          <div class="button-row">
+            <button onclick="setRelay('water_valve', true)">AN</button>
+            <button class="secondary" onclick="setRelay('water_valve', false)">AUS</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-row" style="margin-top:16px;">
+        <label for="waterSeconds">Wasser für</label>
+        <input id="waterSeconds" type="number" min="1" value="{{ config.watering_seconds }}">
+        <span>Sekunden</span>
+        <button onclick="waterPulse()">Start</button>
+      </div>
+
+      <div class="meta">
+        Letzte Bewässerung: <span id="lastWateringAt">{{ state.last_watering_at or "-" }}</span><br>
+        Grund: <span id="lastWateringReason">{{ state.last_watering_reason or "-" }}</span>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <h2>Bodenfeuchte</h2>
+      <div class="meta">Letztes Sensor-Update: <span id="lastSensorUpdate">{{ state.last_sensor_update or "-" }}</span></div>
+      <div class="sensor-grid" id="sensorGrid">
+        {% for sensor in state.soil_sensors %}
+        <div class="sensor-box">
+          <div><strong>{{ sensor.name }}</strong></div>
+          <div class="muted">Kanal {{ sensor.channel }}</div>
+          <div>Rohwert: {{ sensor.raw_value if sensor.raw_value is not none else "-" }}</div>
+          <div>Feuchte: {{ sensor.moisture_percent if sensor.moisture_percent is not none else "-" }} %</div>
+          <div>Trocken unter: {{ sensor.dry_below_percent }} %</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <h2>Verlauf</h2>
+      <canvas id="climateChart"></canvas>
+    </div>
+
+   <div class="card chart-card">
+    <h2>Letztes Bild</h2>
+    <img src="/latest.jpg?ts={{ state.last_image_time or '' }}" alt="Letztes Gewächshausbild" style="max-width:100%; border-radius:12px;">
+    <div class="meta">
+      Letzte Aufnahme: {{ state.last_image_time or "-" }}
+   </div>
+  </div>
+  </main>
+
+  <script>
+    const refreshSeconds = {{ config.refresh_seconds|int }};
+    const chartRefreshSeconds = {{ config.chart_refresh_seconds|int }};
+    let climateChart = null;
+
+    function formatRelayState(on) {
+      return on ? "AN" : "AUS";
+    }
+
+    function applyRelayStyle(element, on) {
+      element.textContent = formatRelayState(on);
+      element.classList.remove("status-on", "status-off");
+      element.classList.add(on ? "status-on" : "status-off");
+    }
+
+    function makeChart(labels, temps, hums) {
+      const ctx = document.getElementById("climateChart");
+      climateChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "Temperatur (°C)", data: temps, tension: 0.2, yAxisID: "y" },
+            { label: "Luftfeuchte (%)", data: hums, tension: 0.2, yAxisID: "y1" }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            y: { type: "linear", position: "left", title: { display: true, text: "°C" } },
+            y1: { type: "linear", position: "right", title: { display: true, text: "%" }, grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+    }
+
+    function renderSensors(sensors) {
+      const grid = document.getElementById("sensorGrid");
+      grid.innerHTML = "";
+
+      (sensors || []).forEach(sensor => {
+        const box = document.createElement("div");
+        box.className = "sensor-box";
+        box.innerHTML = `
+          <div><strong>${sensor.name}</strong></div>
+          <div class="muted">Kanal ${sensor.channel}</div>
+          <div>Rohwert: ${sensor.raw_value ?? "-"}</div>
+          <div>Feuchte: ${sensor.moisture_percent ?? "-"} %</div>
+          <div>Trocken unter: ${sensor.dry_below_percent} %</div>
+        `;
+        grid.appendChild(box);
+      });
+    }
+
+    async function refreshStatus() {
+      const response = await fetch("/api/status");
+      const data = await response.json();
+
+      const latest = data.latest || null;
+      const relays = data.relays || {};
+      const automationActive = !!data.automation_active;
+
+      document.getElementById("tempValue").textContent =
+        latest && latest.temperature_c !== null ? `${latest.temperature_c.toFixed(1)} °C` : "--";
+
+      document.getElementById("humValue").textContent =
+        latest && latest.humidity_percent !== null ? `${latest.humidity_percent.toFixed(1)} %` : "--";
+
+      document.getElementById("timeValue").textContent =
+        latest && latest.label ? latest.label : "Keine Daten";
+
+      document.getElementById("automationState").textContent = automationActive ? "AKTIV" : "AUS";
+
+      applyRelayStyle(document.getElementById("relayExhaust"), !!relays.exhaust);
+      applyRelayStyle(document.getElementById("relayCirculation"), !!relays.circulation);
+      applyRelayStyle(document.getElementById("relayWater"), !!relays.water_valve);
+
+      document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "-";
+      document.getElementById("lastWateringAt").textContent = data.last_watering_at || "-";
+      document.getElementById("lastWateringReason").textContent = data.last_watering_reason || "-";
+
+      renderSensors(data.soil_sensors || []);
+    }
+
+    async function refreshChart() {
+      const response = await fetch("/api/chart");
+      const chart = await response.json();
+
+      const labels = chart.labels || [];
+      const temps = chart.temperature || [];
+      const hums = chart.humidity || [];
+
+      if (!climateChart) {
+        makeChart(labels, temps, hums);
+      } else {
+        climateChart.data.labels = labels;
+        climateChart.data.datasets[0].data = temps;
+        climateChart.data.datasets[1].data = hums;
+        climateChart.update("none");
+      }
+    }
+
+    async function setRelay(name, on) {
+      await fetch(`/api/relays/${name}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on })
+      });
+      setTimeout(refreshStatus, 700);
+    }
+
+    async function toggleAutomation(enabled) {
+      await fetch("/api/automation/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+      });
+      setTimeout(refreshStatus, 700);
+    }
+
+    async function waterPulse() {
+      const seconds = parseInt(document.getElementById("waterSeconds").value || "10", 10);
+      await fetch("/api/water_pulse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seconds })
+      });
+      setTimeout(refreshStatus, 700);
+    }
+
+    refreshStatus();
+    refreshChart();
+
+    setInterval(refreshStatus, refreshSeconds * 1000);
+    setInterval(refreshChart, chartRefreshSeconds * 1000);
+  </script>
+</body>
+</html>

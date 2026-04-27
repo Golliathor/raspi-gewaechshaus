@@ -1,0 +1,36 @@
+# Virtual env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs & Daten
+logs/
+*.csv
+*.log
+
+# Bilder (Zeitraffer)
+images/
+*.jpg
+*.png
+
+# Runtime files
+web/state.json
+
+# Config (optional)
+web/config.json.venv/
+venv/
+env/
+
+__pycache__/
+*.pyc
+
+logs/
+*.csv
+
+*.png
+*.jpg
+
+config.json

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kalibrierung</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7f5; color: #1f2937; }
+    header { background: #1f7a4d; color: white; padding: 16px 20px; }
+    main { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; background: #1f7a4d; color: white; margin-right: 8px; }
+    .muted { color: #6b7280; }
+    nav a { color: white; margin-right: 14px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="margin:0 0 8px 0;">Kalibrierung Bodenfeuchte</h1>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/config">Konfiguration</a>
+      <a href="/calibration">Kalibrierung</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="muted">
+      Vorgehen: Sensor erst trocken in die Luft halten und "Trocken speichern" drücken,
+      danach in gut feuchte Erde oder Wasser halten und "Nass speichern" drücken.
+    </p>
+
+    <div class="grid" id="sensorGrid">
+      {% for sensor in state.soil_sensors %}
+      <div class="card">
+        <h2>{{ sensor.name }}</h2>
+        <div>Aktueller Rohwert: <strong>{{ sensor.raw_value if sensor.raw_value is not none else "-" }}</strong></div>
+        <div>Aktuelle Feuchte: <strong>{{ sensor.moisture_percent if sensor.moisture_percent is not none else "-" }} %</strong></div>
+        <div>Kanal: {{ sensor.channel }}</div>
+        <div>Kalibrierung trocken: {{ sensor.calibration_raw_dry }}</div>
+        <div>Kalibrierung nass: {{ sensor.calibration_raw_wet }}</div>
+        <div style="margin-top:12px;">
+          <button onclick="calibrate({{ sensor.index }}, 'dry')">Trocken speichern</button>
+          <button onclick="calibrate({{ sensor.index }}, 'wet')">Nass speichern</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  <div class="card" style="margin-bottom:16px;">
+  <h2>Kamera Fokus-Test</h2>
+  <p class="muted">
+    Mit dieser Testaufnahme kannst du den Fokus manuell am Objektiv einstellen.
+    Nach jeder Drehung einfach neu auslösen und das Bild vergleichen.
+  </p>
+
+  <div style="margin-top:12px;">
+    <button onclick="makeTestCapture()">Testaufnahme erstellen</button>
+  </div>
+
+  <div id="testCaptureStatus" class="muted" style="margin-top:12px;">
+    Noch keine neue Testaufnahme erstellt.
+  </div>
+
+  <div style="margin-top:16px;">
+    <img
+      id="testCaptureImage"
+      src="/test_capture.jpg"
+      alt="Testaufnahme"
+      style="max-width:100%; border-radius:12px; border:1px solid #ddd;"
+      onerror="this.style.display='none';"
+    >
+  </div>
+  </div>
+  </main>
+
+  <script>
+    async function calibrate(sensorIndex, calibrationType) {
+      const response = await fetch(`/api/calibrate/${sensorIndex}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calibration_type: calibrationType })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.error || "Kalibrierung fehlgeschlagen");
+        return;
+      }
+
+      alert(`Gespeichert: ${calibrationType} = ${data.raw_value}`);
+      location.reload();
+    }
+  
+  async function calibrate(sensorIndex, calibrationType) {
+    const response = await fetch(`/api/calibrate/${sensorIndex}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calibration_type: calibrationType })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      alert(data.error || "Kalibrierung fehlgeschlagen");
+      return;
+    }
+
+    alert(`Gespeichert: ${calibrationType} = ${data.raw_value}`);
+    location.reload();
+  }
+
+  async function makeTestCapture() {
+    const status = document.getElementById("testCaptureStatus");
+    const img = document.getElementById("testCaptureImage");
+
+    status.textContent = "Testaufnahme läuft ...";
+
+    const response = await fetch("/api/camera/test_capture", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      status.textContent = "Fehler bei der Testaufnahme: " + (data.error || "unbekannt");
+      return;
+    }
+
+    status.textContent = "Testaufnahme erstellt: " + data.timestamp;
+    img.style.display = "block";
+    img.src = `/test_capture.jpg?t=${Date.now()}`;
+  }
+  </script>
+</body>
+</html>
