@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 from datetime import datetime
+from collections import deque
 
 from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file
 
@@ -266,16 +267,21 @@ def read_csv_rows(limit=None):
     rows = []
     try:
         with open(CSV_PATH, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
+            if limit is None:
+                reader = csv.DictReader(f)
+                source_rows = reader
+            else:
+                header = f.readline()
+                last_lines = deque(f, maxlen=limit)
+                source_rows = csv.DictReader([header] + list(last_lines))
+
+            for row in source_rows:
                 normalized = normalize_row(row)
                 if normalized:
                     rows.append(normalized)
     except Exception:
         return []
 
-    if limit is not None:
-        return rows[-limit:]
     return rows
 
 
@@ -326,7 +332,6 @@ def index():
         latest=latest,
         config=config,
         relay_states=state.get("relays", {}),
-        chart_data=build_chart_data(int(config.get("chart_points", 200))),
         state=state,
     )
 
