@@ -77,14 +77,6 @@ DEFAULT_CONFIG = {
             "calibration_raw_dry": 210,
             "calibration_raw_wet": 110,
         },
-        {
-            "name": "Sensor 4",
-            "enabled": False,
-            "channel": 3,
-            "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
-        },
     ],
 }
 
