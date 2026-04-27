@@ -133,10 +133,13 @@
 
    <div class="card chart-card">
     <h2>Letztes Bild</h2>
-    <img src="/latest.jpg?ts={{ state.last_image_time or '' }}" alt="Letztes Gewächshausbild" style="max-width:100%; border-radius:12px;">
-    <div class="meta">
-      Letzte Aufnahme: {{ state.last_image_time or "-" }}
-   </div>
+    <p>Letzte Aufnahme: {{ state.last_image_time or "-" }}</p>
+
+    <button onclick="loadLatestImage()">Bild laden / aktualisieren</button>
+
+    <div id="latest-image-box">
+      <p>Bild noch nicht geladen.</p>
+    </div>
   </div>
   </main>
 
@@ -272,6 +275,11 @@
       });
       setTimeout(refreshStatus, 700);
     }
+    function loadLatestImage() {
+      const box = document.getElementById("latest-image-box");
+      const ts = Date.now(); // verhindert Browser-Cache
+      box.innerHTML = `<img src="/latest.jpg?t=${ts}" style="max-width:100%; border-radius:12px;">`;
+     }
 
     refreshStatus();
     refreshChart();
