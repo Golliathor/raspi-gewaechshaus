@@ -132,6 +132,7 @@
           <label style="margin-top:10px;"><input type="checkbox" name="sensor_{{ loop.index0 }}_enabled" {% if sensor.enabled %}checked{% endif %}> Sensor aktiv</label>
         </div>
         {% endfor %}
+        <div class="sensor-block">
         <h2>Lichtsensor</h2>
 
         <label>
@@ -150,6 +151,7 @@
 
       <label>Rohwert hell</label>
       <input name="light_sensor_calibration_raw_bright" type="number" value="{{ config.light_sensor.calibration_raw_bright }}">
+      </div>
       </div>
 
       <div class="card">
