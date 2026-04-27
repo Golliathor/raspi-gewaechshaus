@@ -119,7 +119,7 @@ def load_config():
     else:
         sensors = []
         defaults = DEFAULT_CONFIG["soil_sensors"]
-        for i in range(3):
+        for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
             base = defaults[i].copy()
             if i < len(cfg["soil_sensors"]) and isinstance(cfg["soil_sensors"][i], dict):
                 base.update(cfg["soil_sensors"][i])
@@ -397,7 +397,7 @@ def config_page():
         config["camera_filename_pattern"] = form.get("camera_filename_pattern", config.get("camera_filename_pattern", "%Y-%m-%d_%H-%M-%S.jpg"))
 
         sensors = []
-        for i in range(3):
+        for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
             base = config["soil_sensors"][i].copy()
             base["name"] = form.get(f"sensor_{i}_name", base["name"])
             base["enabled"] = form.get(f"sensor_{i}_enabled") == "on"
