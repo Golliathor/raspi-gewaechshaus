@@ -72,14 +72,6 @@ DEFAULT_CONFIG = {
             "calibration_raw_dry": 210,
             "calibration_raw_wet": 110,
         },
-        {
-            "name": "Sensor 4",
-            "enabled": False,
-            "channel": 3,
-            "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
-        },
     ],
 
     "camera_enabled": True,
@@ -127,7 +119,7 @@ def load_config():
     else:
         sensors = []
         defaults = DEFAULT_CONFIG["soil_sensors"]
-        for i in range(4):
+        for i in range(3):
             base = defaults[i].copy()
             if i < len(cfg["soil_sensors"]) and isinstance(cfg["soil_sensors"][i], dict):
                 base.update(cfg["soil_sensors"][i])
@@ -405,7 +397,7 @@ def config_page():
         config["camera_filename_pattern"] = form.get("camera_filename_pattern", config.get("camera_filename_pattern", "%Y-%m-%d_%H-%M-%S.jpg"))
 
         sensors = []
-        for i in range(4):
+        for i in range(3):
             base = config["soil_sensors"][i].copy()
             base["name"] = form.get(f"sensor_{i}_name", base["name"])
             base["enabled"] = form.get(f"sensor_{i}_enabled") == "on"
