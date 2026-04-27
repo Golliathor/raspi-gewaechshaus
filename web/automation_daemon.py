@@ -108,7 +108,14 @@ def load_config():
     cfg = load_json(CONFIG_PATH, {})
     merged = DEFAULT_CONFIG.copy()
     merged.update(cfg)
-
+    
+    if "light_sensor" not in cfg or not isinstance(cfg["light_sensor"], dict):
+        merged["light_sensor"] = DEFAULT_CONFIG["light_sensor"]
+    else:
+        light_sensor = DEFAULT_CONFIG["light_sensor"].copy()
+        light_sensor.update(cfg["light_sensor"])
+        merged["light_sensor"] = light_sensor
+    
     if "soil_sensors" not in cfg or not isinstance(cfg["soil_sensors"], list):
         merged["soil_sensors"] = DEFAULT_CONFIG["soil_sensors"]
     else:
@@ -234,6 +241,45 @@ def raw_to_percent(raw_value, raw_dry, raw_wet):
     percent = (raw_dry - raw_value) / (raw_dry - raw_wet) * 100.0
     return round(clamp(percent, 0.0, 100.0), 1)
 
+def raw_to_light_percent(raw_value, raw_dark, raw_bright):
+    if raw_value is None:
+        return None
+    raw_value = float(raw_value)
+    raw_dark = float(raw_dark)
+    raw_bright = float(raw_bright)
+
+    if raw_dark == raw_bright:
+        return None
+
+    percent = (raw_dark - raw_value) / (raw_dark - raw_bright) * 100.0
+    return round(clamp(percent, 0.0, 100.0), 1)
+
+
+def read_light_sensor(config):
+    sensor = config.get("light_sensor", {})
+    enabled = bool(sensor.get("enabled", False))
+    channel = int(sensor.get("channel", 3))
+
+    raw = None
+    percent = None
+
+    if enabled and bool(config.get("pcf8591_enabled", True)):
+        raw = read_pcf8591_channel(int(config.get("pcf8591_address", 72)), channel)
+        percent = raw_to_light_percent(
+            raw,
+            sensor.get("calibration_raw_dark", 255),
+            sensor.get("calibration_raw_bright", 0),
+        )
+
+    return {
+        "name": sensor.get("name", "Lichtsensor"),
+        "enabled": enabled,
+        "channel": channel,
+        "raw_value": raw,
+        "light_percent": percent,
+        "calibration_raw_dark": sensor.get("calibration_raw_dark", 255),
+        "calibration_raw_bright": sensor.get("calibration_raw_bright", 0),
+    }
 
 def read_pcf8591_channel(address, channel):
     if not SMBUS_AVAILABLE:
@@ -458,6 +504,7 @@ def main():
 
         if now - last_sensor_read_ts >= int(config.get("sensor_read_interval_seconds", 30)):
             state["soil_sensors"] = read_soil_sensors(config)
+            state["light_sensor"] = read_light_sensor(config)
             state["last_sensor_update"] = now_iso
             last_sensor_read_ts = now
 
