@@ -46,6 +46,15 @@
         </div>
       </div>
       {% endfor %}
+      <h2>Lichtsensor</h2>
+        {% set light = state.light_sensor or {} %}
+
+        <div class="card">
+          <p><strong>{{ light.name or "Lichtsensor" }}</strong></p>
+          <p>Kanal: {{ light.channel if light.channel is not none else 3 }}</p>
+          <p>Rohwert: {{ light.raw_value if light.raw_value is not none else "-" }}</p>
+          <p>Helligkeit: {{ light.light_percent if light.light_percent is not none else "-" }} %</p>
+        </div>
     </div>
   <div class="card" style="margin-bottom:16px;">
   <h2>Kamera Fokus-Test</h2>
