@@ -47,6 +47,14 @@ DEFAULT_CONFIG = {
     "sensor_read_interval_seconds": 30,
     "watering_check_interval_seconds": 300,
 
+    "light_sensor": {
+    "name": "Lichtsensor",
+    "enabled": True,
+    "channel": 3,
+    "calibration_raw_dark": 255,
+    "calibration_raw_bright": 0,
+    },
+    
     "soil_sensors": [
         {
             "name": "Sensor 1",
@@ -114,6 +122,13 @@ def load_config():
     merged = DEFAULT_CONFIG.copy()
     merged.update(cfg)
 
+    if "light_sensor" not in cfg or not isinstance(cfg["light_sensor"], dict):
+        merged["light_sensor"] = DEFAULT_CONFIG["light_sensor"]
+    else:
+        light_sensor = DEFAULT_CONFIG["light_sensor"].copy()
+        light_sensor.update(cfg["light_sensor"])
+        merged["light_sensor"] = light_sensor
+    
     if "soil_sensors" not in cfg or not isinstance(cfg["soil_sensors"], list):
         merged["soil_sensors"] = DEFAULT_CONFIG["soil_sensors"]
     else:
@@ -140,6 +155,7 @@ def load_state():
             "circulation": False,
             "water_valve": False
         },
+        "light_sensor": {},
         "soil_sensors": [],
         "automation_active": True,
         "last_sensor_update": None,
@@ -442,6 +458,7 @@ def api_status():
         "config": config,
         "relays": state.get("relays", {}),
         "automation_active": state.get("automation_active", config.get("automation_enabled", True)),
+        "light_sensor": state.get("light_sensor", {}),
         "soil_sensors": state.get("soil_sensors", []),
         "last_sensor_update": state.get("last_sensor_update"),
         "last_watering_at": state.get("last_watering_at"),
