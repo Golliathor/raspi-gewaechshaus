@@ -125,7 +125,15 @@
         {% endfor %}
       </div>
     </div>
-
+    <section class="card">
+      <h2>Licht</h2>
+      {% set light = state.light_sensor or {} %}
+      <p><strong>{{ light.name or "Lichtsensor" }}</strong></p>
+      <p>Kanal: {{ light.channel if light.channel is not none else 3 }}</p>
+      <p>Rohwert: <span id="lightRaw">{{ light.raw_value if light.raw_value is not none else "-" }}</span></p>
+      <p>Helligkeit: <span id="lightPercent">{{ light.light_percent if light.light_percent is not none else "-" }}</span> %</p>
+    </section>
+    
     <div class="card chart-card">
       <h2>Verlauf</h2>
       <p id="chart-loading">Diagramm wird geladen...</p>
@@ -229,6 +237,10 @@
       document.getElementById("lastWateringReason").textContent = data.last_watering_reason || "-";
 
       renderSensors(data.soil_sensors || []);
+      
+      const light = data.light_sensor || {};
+      document.getElementById("lightRaw").textContent = light.raw_value ?? "-";
+      document.getElementById("lightPercent").textContent = light.light_percent ?? "-";
     }
 
     async function refreshChart() {
