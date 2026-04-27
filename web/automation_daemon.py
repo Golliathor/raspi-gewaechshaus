@@ -51,7 +51,15 @@ DEFAULT_CONFIG = {
     "pcf8591_address": 72,
     "sensor_read_interval_seconds": 30,
     "watering_check_interval_seconds": 300,
-
+    
+    "light_sensor": {
+    "name": "Lichtsensor",
+    "enabled": True,
+    "channel": 3,
+    "calibration_raw_dark": 255,
+    "calibration_raw_bright": 0,
+    },
+    
     "soil_sensors": [
         {
             "name": "Sensor 1",
