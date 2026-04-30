@@ -22,6 +22,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
 COMMAND_PATH = os.path.join(BASE_DIR, "command.json")
 CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
+SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 
 LOOP_INTERVAL = 5
 
@@ -258,7 +259,50 @@ def raw_to_light_percent(raw_value, raw_dark, raw_bright):
 
     percent = (raw_dark - raw_value) / (raw_dark - raw_bright) * 100.0
     return round(clamp(percent, 0.0, 100.0), 1)
+    
+def light_class(percent):
+    if percent is None:
+        return "unbekannt"
+    if percent < 10:
+        return "dunkel"
+    if percent < 30:
+        return "wenig_licht"
+    if percent < 60:
+        return "schatten"
+    if percent < 80:
+        return "hell"
+    if percent < 95:
+        return "sehr_hell"
+    return "direkte_sonne"
 
+
+def append_sensor_log(timestamp, soil_sensors, light_sensor):
+    os.makedirs(os.path.dirname(SENSOR_CSV_PATH), exist_ok=True)
+
+    row = {
+        "timestamp": timestamp,
+        "soil1_raw": None,
+        "soil1_percent": None,
+        "soil2_raw": None,
+        "soil2_percent": None,
+        "soil3_raw": None,
+        "soil3_percent": None,
+        "light_raw": light_sensor.get("raw_value"),
+        "light_percent": light_sensor.get("light_percent"),
+        "light_class": light_class(light_sensor.get("light_percent")),
+    }
+
+    for i, sensor in enumerate(soil_sensors[:3], start=1):
+        row[f"soil{i}_raw"] = sensor.get("raw_value")
+        row[f"soil{i}_percent"] = sensor.get("moisture_percent")
+
+    file_exists = os.path.exists(SENSOR_CSV_PATH)
+
+    with open(SENSOR_CSV_PATH, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=row.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
 
 def read_light_sensor(config):
     sensor = config.get("light_sensor", {})
@@ -520,6 +564,8 @@ def main():
         if now - last_sensor_read_ts >= int(config.get("sensor_read_interval_seconds", 30)):
             state["soil_sensors"] = read_soil_sensors(config)
             state["light_sensor"] = read_light_sensor(config)
+            state["light_sensor"]["light_class"] = light_class(state["light_sensor"].get("light_percent"))
+            append_sensor_log(now_iso, state["soil_sensors"], state["light_sensor"])
             state["last_sensor_update"] = now_iso
             last_sensor_read_ts = now
 
