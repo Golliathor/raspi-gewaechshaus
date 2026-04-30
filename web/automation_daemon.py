@@ -51,8 +51,9 @@ DEFAULT_CONFIG = {
     "chart_refresh_seconds": 60,
     "chart_points": 200,
 
-    "pcf8591_enabled": True,
-    "pcf8591_address": 72,
+    "adc_enabled": True,
+    "adc_type": "ADS1115",
+    "adc_address": 72,
     "sensor_read_interval_seconds": 30,
     "watering_check_interval_seconds": 300,
     
