@@ -42,8 +42,9 @@ DEFAULT_CONFIG = {
     "chart_refresh_seconds": 60,
     "chart_points": 200,
 
-    "pcf8591_enabled": True,
-    "pcf8591_address": 72,
+    "adc_enabled": True,
+    "adc_type": "ADS1115",
+    "adc_address": 72,
     "sensor_read_interval_seconds": 30,
     "watering_check_interval_seconds": 300,
 
@@ -51,8 +52,8 @@ DEFAULT_CONFIG = {
     "name": "Lichtsensor",
     "enabled": True,
     "channel": 3,
-    "calibration_raw_dark": 255,
-    "calibration_raw_bright": 0,
+    "calibration_raw_dark": 26000,
+    "calibration_raw_bright": 2000
     },
     
     "soil_sensors": [
@@ -61,24 +62,24 @@ DEFAULT_CONFIG = {
             "enabled": True,
             "channel": 0,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
         {
             "name": "Sensor 2",
             "enabled": False,
             "channel": 1,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
         {
             "name": "Sensor 3",
             "enabled": False,
             "channel": 2,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
     ],
 
@@ -367,7 +368,7 @@ def config_page():
             "refresh_seconds",
             "chart_refresh_seconds",
             "chart_points",
-            "pcf8591_address",
+            "adc_address",
             "sensor_read_interval_seconds",
             "watering_check_interval_seconds",
             "camera_width",
@@ -383,7 +384,7 @@ def config_page():
             "refresh_seconds",
             "chart_refresh_seconds",
             "chart_points",
-            "pcf8591_address",
+            "adc_address",
             "sensor_read_interval_seconds",
             "watering_check_interval_seconds",
             "camera_width",
@@ -400,7 +401,7 @@ def config_page():
 
         config["automation_enabled"] = form.get("automation_enabled") == "on"
         config["watering_enabled"] = form.get("watering_enabled") == "on"
-        config["pcf8591_enabled"] = form.get("pcf8591_enabled") == "on"
+        config["adc_enabled"] = form.get("adc_enabled") == "on"
         config["camera_enabled"] = form.get("camera_enabled") == "on"
         config["camera_hflip"] = form.get("camera_hflip") == "on"
         config["camera_vflip"] = form.get("camera_vflip") == "on"
