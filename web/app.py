@@ -14,6 +14,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
 COMMAND_PATH = os.path.join(BASE_DIR, "command.json")
 CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
+SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
 
 DEFAULT_CONFIG = {
@@ -321,6 +322,51 @@ def build_chart_data(points):
         "humidity": [r["humidity_percent"] for r in rows],
     }
 
+def read_sensor_csv_rows(limit=None):
+    if not os.path.exists(SENSOR_CSV_PATH):
+        return []
+
+    rows = []
+    try:
+        with open(SENSOR_CSV_PATH, "r", encoding="utf-8", newline="") as f:
+            if limit is None:
+                source_rows = csv.DictReader(f)
+            else:
+                header = f.readline()
+                last_lines = deque(f, maxlen=limit)
+                source_rows = csv.DictReader([header] + list(last_lines))
+
+            for row in source_rows:
+                ts = parse_timestamp(row.get("timestamp"))
+                if not ts:
+                    continue
+
+                rows.append({
+                    "label": ts.strftime("%d.%m. %H:%M"),
+                    "soil1": parse_float(row.get("soil1_percent")),
+                    "soil2": parse_float(row.get("soil2_percent")),
+                    "soil3": parse_float(row.get("soil3_percent")),
+                    "light": parse_float(row.get("light_percent")),
+                    "light_raw": parse_float(row.get("light_raw")),
+                    "light_class": row.get("light_class"),
+                })
+    except Exception:
+        return []
+
+    return rows
+
+
+def build_sensor_chart_data(points):
+    rows = read_sensor_csv_rows(limit=points)
+    return {
+        "labels": [r["label"] for r in rows],
+        "soil1": [r["soil1"] for r in rows],
+        "soil2": [r["soil2"] for r in rows],
+        "soil3": [r["soil3"] for r in rows],
+        "light": [r["light"] for r in rows],
+        "light_raw": [r["light_raw"] for r in rows],
+        "light_class": [r["light_class"] for r in rows],
+    }
 
 @app.route("/")
 def index():
@@ -481,7 +527,12 @@ def api_chart():
     points = request.args.get("points", default=config.get("chart_points", 200), type=int)
     return jsonify(build_chart_data(points))
 
-
+@app.route("/api/sensor_chart")
+def api_sensor_chart():
+    config = load_config()
+    points = request.args.get("points", default=config.get("chart_points", 200), type=int)
+    return jsonify(build_sensor_chart_data(points))
+    
 @app.route("/api/relays/<name>", methods=["POST"])
 def api_set_relay(name):
     if name not in {"exhaust", "circulation", "water_valve"}:
