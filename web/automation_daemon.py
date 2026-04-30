@@ -2,6 +2,10 @@ import csv
 import json
 import os
 import time
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
 from datetime import datetime, date
 
 try:
@@ -56,8 +60,8 @@ DEFAULT_CONFIG = {
     "name": "Lichtsensor",
     "enabled": True,
     "channel": 3,
-    "calibration_raw_dark": 255,
-    "calibration_raw_bright": 0,
+    "calibration_raw_dark": 26000,
+    "calibration_raw_bright": 2000
     },
     
     "soil_sensors": [
@@ -66,24 +70,24 @@ DEFAULT_CONFIG = {
             "enabled": True,
             "channel": 0,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
         {
             "name": "Sensor 2",
             "enabled": False,
             "channel": 1,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
         {
             "name": "Sensor 3",
             "enabled": False,
             "channel": 2,
             "dry_below_percent": 35,
-            "calibration_raw_dry": 210,
-            "calibration_raw_wet": 110,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000
         },
     ],
 }
@@ -263,8 +267,8 @@ def read_light_sensor(config):
     raw = None
     percent = None
 
-    if enabled and bool(config.get("pcf8591_enabled", True)):
-        raw = read_pcf8591_channel(int(config.get("pcf8591_address", 72)), channel)
+    if enabled and bool(config.get("adc_enabled", True)):
+        raw = read_adc_channel(int(config.get("adc_address", 72)), channel)
         percent = raw_to_light_percent(
             raw,
             sensor.get("calibration_raw_dark", 255),
@@ -281,27 +285,37 @@ def read_light_sensor(config):
         "calibration_raw_bright": sensor.get("calibration_raw_bright", 0),
     }
 
-def read_pcf8591_channel(address, channel):
-    if not SMBUS_AVAILABLE:
+_ads1115 = None
+
+def get_ads1115(address=0x48):
+    global _ads1115
+    if _ads1115 is None:
+        i2c = busio.I2C(board.SCL, board.SDA)
+        _ads1115 = ADS.ADS1115(i2c, address=address)
+        _ads1115.gain = 1
+    return _ads1115
+
+
+def read_adc_channel(address, channel):
+    if channel == 0:
+        pin = ADS.P0
+    elif channel == 1:
+        pin = ADS.P1
+    elif channel == 2:
+        pin = ADS.P2
+    elif channel == 3:
+        pin = ADS.P3
+    else:
         return None
 
-    if channel not in (0, 1, 2, 3):
-        return None
-
-    try:
-        with SMBus(1) as bus:
-            control_byte = 0x40 | channel
-            bus.write_byte(address, control_byte)
-            bus.read_byte(address)  # dummy read
-            value = bus.read_byte(address)
-            return int(value)
-    except Exception:
-        return None
+    ads = get_ads1115(address)
+    chan = AnalogIn(ads, pin)
+    return chan.value
 
 
 def read_soil_sensors(config):
     results = []
-    pcf_enabled = bool(config.get("pcf8591_enabled", True))
+    pcf_enabled = bool(config.get("adc_enabled", True))
     address = int(config.get("pcf8591_address", 72))
     sensors = config.get("soil_sensors", [])
 
@@ -312,7 +326,7 @@ def read_soil_sensors(config):
         percent = None
 
         if enabled and pcf_enabled:
-            raw = read_pcf8591_channel(address, channel)
+            raw = read_adc_channel(int(config.get("adc_address", 72)), channel)
             percent = raw_to_percent(
                 raw,
                 sensor.get("calibration_raw_dry", 210),
