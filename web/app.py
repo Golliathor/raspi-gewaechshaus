@@ -2,10 +2,12 @@ import csv
 import json
 import os
 import subprocess
+import tempfile
+import zipfile
 from datetime import datetime
 from collections import deque
 
-from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file
+from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request
 
 app = Flask(__name__)
 
@@ -14,6 +16,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
 COMMAND_PATH = os.path.join(BASE_DIR, "command.json")
 CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
+LOG_DIR = "/home/grow/gewaechshaus/logs"
 SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
 
@@ -621,7 +624,77 @@ def test_capture_image():
     if os.path.exists(TEST_IMAGE_PATH):
         return send_file(TEST_IMAGE_PATH, mimetype="image/jpeg")
     return ("Kein Testbild vorhanden", 404)
+def create_zip_from_folder(folder_path, zip_prefix):
+    if not os.path.isdir(folder_path):
+        return None
 
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    tmp = tempfile.NamedTemporaryFile(
+        suffix=f"_{zip_prefix}_{timestamp}.zip",
+        delete=False
+    )
+    tmp.close()
+
+    with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_path):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+
+                if not os.path.isfile(file_path):
+                    continue
+
+                arcname = os.path.relpath(file_path, folder_path)
+                zipf.write(file_path, arcname)
+
+    return tmp.name
+
+
+@app.route("/download/images")
+def download_images():
+    config = load_config()
+    image_dir = config.get("camera_image_dir", "/home/grow/gewaechshaus/images")
+
+    zip_path = create_zip_from_folder(image_dir, "bilder")
+    if zip_path is None:
+        return ("Bildordner nicht gefunden", 404)
+
+    @after_this_request
+    def cleanup(response):
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+        return response
+
+    return send_file(
+        zip_path,
+        as_attachment=True,
+        download_name="gewaechshaus_bilder.zip",
+        mimetype="application/zip",
+    )
+
+
+@app.route("/download/logs")
+def download_logs():
+    zip_path = create_zip_from_folder(LOG_DIR, "logs")
+    if zip_path is None:
+        return ("Logordner nicht gefunden", 404)
+
+    @after_this_request
+    def cleanup(response):
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+        return response
+
+    return send_file(
+        zip_path,
+        as_attachment=True,
+        download_name="gewaechshaus_logs.zip",
+        mimetype="application/zip",
+    )
+    
 if __name__ == "__main__":
     ensure_config()
     app.run(host="0.0.0.0", port=8080, debug=False)
