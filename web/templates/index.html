@@ -133,6 +133,11 @@
         <p>Kanal: {{ light.channel if light.channel is not none else 3 }}</p>
         <p>Rohwert: <span id="lightRaw">{{ light.raw_value if light.raw_value is not none else "-" }}</span></p>
         <p>Helligkeit: <span id="lightPercent">{{ light.light_percent if light.light_percent is not none else "-" }}</span> %</p>
+        <p>Lichtklasse:
+        <span id="lightClass">
+            {{ light.light_class if light.light_class else "-" }}
+        </span>
+        </p>
       </div>
     </div>
     <div class="card chart-card">
@@ -240,6 +245,7 @@
       renderSensors(data.soil_sensors || []);
       
       const light = data.light_sensor || {};
+      document.getElementById("lightClass").textContent = light.light_class ?? "-";
       document.getElementById("lightRaw").textContent = light.raw_value ?? "-";
       document.getElementById("lightPercent").textContent = light.light_percent ?? "-";
     }
@@ -261,7 +267,51 @@
         climateChart.update("none");
       }
     }
+    
+    let sensorChart = null;
+    
+    async function refreshSensorChart() {
+      const response = await fetch("/api/sensor_chart");
+      const data = await response.json();
 
+      const ctx = document.getElementById("sensorChart");
+      if (!ctx) return;
+
+      if (!sensorChart) {
+        sensorChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: data.labels,
+          datasets: [
+            { label: "Boden 1 (%)", data: data.soil1 },
+            { label: "Boden 2 (%)", data: data.soil2 },
+            { label: "Boden 3 (%)", data: data.soil3 },
+            { label: "Licht (%)", data: data.light }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              min: 0,
+              max: 100
+            }
+          }
+        }
+      });  
+    } else {
+      sensorChart.data.labels = data.labels;
+      sensorChart.data.datasets[0].data = data.soil1;
+      sensorChart.data.datasets[1].data = data.soil2;
+      sensorChart.data.datasets[2].data = data.soil3;
+      sensorChart.data.datasets[3].data = data.light;
+      sensorChart.update();
+    }
+  }
+
+  refreshSensorChart();
+  setInterval(refreshSensorChart, {{ config.chart_refresh_seconds * 1000 }});
+    
     async function setRelay(name, on) {
       await fetch(`/api/relays/${name}`, {
         method: "POST",
