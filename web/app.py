@@ -19,6 +19,7 @@ CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
 LOG_DIR = "/home/grow/gewaechshaus/logs"
 SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
+CONFIG_LOG_PATH = "/home/grow/gewaechshaus/logs/config_aenderungen.csv"
 
 DEFAULT_CONFIG = {
     "greenhouse_name": "Raspi-Gewächshaus",
@@ -114,7 +115,61 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp_path, path)
 
+def flatten_dict(data, prefix=""):
+    items = {}
 
+    if isinstance(data, dict):
+        for key, value in data.items():
+            new_key = f"{prefix}.{key}" if prefix else key
+            items.update(flatten_dict(value, new_key))
+    elif isinstance(data, list):
+        for index, value in enumerate(data):
+            new_key = f"{prefix}.{index}" if prefix else str(index)
+            items.update(flatten_dict(value, new_key))
+    else:
+        items[prefix] = data
+
+    return items
+
+
+def log_config_changes(old_config, new_config):
+    old_flat = flatten_dict(old_config)
+    new_flat = flatten_dict(new_config)
+
+    changed_keys = sorted(set(old_flat.keys()) | set(new_flat.keys()))
+
+    rows = []
+    timestamp = datetime.now().isoformat(timespec="seconds")
+
+    for key in changed_keys:
+        old_value = old_flat.get(key)
+        new_value = new_flat.get(key)
+
+        if old_value != new_value:
+            rows.append({
+                "timestamp": timestamp,
+                "key": key,
+                "old_value": old_value,
+                "new_value": new_value,
+            })
+
+    if not rows:
+        return
+
+    os.makedirs(os.path.dirname(CONFIG_LOG_PATH), exist_ok=True)
+    file_exists = os.path.exists(CONFIG_LOG_PATH)
+
+    with open(CONFIG_LOG_PATH, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["timestamp", "key", "old_value", "new_value"]
+        )
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerows(rows)
+        
 def ensure_config():
     os.makedirs(BASE_DIR, exist_ok=True)
     if not os.path.exists(CONFIG_PATH):
@@ -149,7 +204,11 @@ def load_config():
     return merged
 
 
-def save_config(config):
+def save_config(config, old_config=None):
+    if old_config is None:
+        old_config = load_json(CONFIG_PATH, {})
+
+    log_config_changes(old_config, config)
     save_json(CONFIG_PATH, config)
 
 
@@ -397,6 +456,7 @@ def index():
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
     config = load_config()
+    old_config = json.loads(json.dumps(config))
 
     if request.method == "POST":
         form = request.form
@@ -484,7 +544,7 @@ def config_page():
             sensors.append(base)
 
         config["soil_sensors"] = sensors
-        save_config(config)
+        save_config(config, old_config)
 
         return redirect(url_for("config_page"))
 
