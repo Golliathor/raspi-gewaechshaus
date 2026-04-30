@@ -23,6 +23,7 @@ STATE_PATH = os.path.join(BASE_DIR, "state.json")
 COMMAND_PATH = os.path.join(BASE_DIR, "command.json")
 CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
 SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
+ACTION_LOG_PATH = "/home/grow/gewaechshaus/logs/actions.csv"
 
 LOOP_INTERVAL = 5
 
@@ -109,7 +110,92 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
     os.replace(tmp_path, path)
 
+def append_csv_row(path, fieldnames, row):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    file_exists = os.path.exists(path)
 
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        writer.writerow(row)
+
+
+def log_action(event, details="", source="automation"):
+    append_csv_row(
+        ACTION_LOG_PATH,
+        ["timestamp", "event", "source", "details"],
+        {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "event": event,
+            "source": source,
+            "details": details,
+        },
+    )
+
+
+def light_class_from_percent(percent):
+    if percent is None:
+        return None
+    if percent >= 80:
+        return "direkte_sonne"
+    if percent >= 50:
+        return "hell"
+    if percent >= 25:
+        return "bewoelkt_oder_schatten"
+    return "dunkel"
+
+
+def log_sensor_values(sensor_states, light_sensor=None):
+    row = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+
+        "soil1_raw": None,
+        "soil1_percent": None,
+        "soil2_raw": None,
+        "soil2_percent": None,
+        "soil3_raw": None,
+        "soil3_percent": None,
+
+        "light_raw": None,
+        "light_percent": None,
+        "light_class": None,
+    }
+
+    for sensor in sensor_states:
+        index = int(sensor.get("index", 0)) + 1
+
+        if index not in (1, 2, 3):
+            continue
+
+        row[f"soil{index}_raw"] = sensor.get("raw_value")
+        row[f"soil{index}_percent"] = sensor.get("moisture_percent")
+
+    if light_sensor:
+        light_percent = light_sensor.get("light_percent")
+        row["light_raw"] = light_sensor.get("raw_value")
+        row["light_percent"] = light_percent
+        row["light_class"] = light_class_from_percent(light_percent)
+
+    append_csv_row(
+        SENSOR_CSV_PATH,
+        [
+            "timestamp",
+            "soil1_raw",
+            "soil1_percent",
+            "soil2_raw",
+            "soil2_percent",
+            "soil3_raw",
+            "soil3_percent",
+            "light_raw",
+            "light_percent",
+            "light_class",
+        ],
+        row,
+    )
+    
 def load_config():
     cfg = load_json(CONFIG_PATH, {})
     merged = DEFAULT_CONFIG.copy()
@@ -437,11 +523,16 @@ def apply_fan_control(latest_values, config):
     return get_relay_state()
 
 
-def water_for_seconds(seconds):
+def water_for_seconds(seconds, reason="manual_or_automation"):
     seconds = max(1, int(seconds))
+
+    log_action("watering_started", f"seconds={seconds}; reason={reason}")
+
     set_relay("water_valve", True)
     time.sleep(seconds)
     set_relay("water_valve", False)
+
+    log_action("watering_finished", f"seconds={seconds}; reason={reason}")
 
 
 def should_water_by_sensor(config, sensor_states):
@@ -478,6 +569,7 @@ def handle_command(config, state):
         on = bool(command.get("on", False))
         if name in {"exhaust", "circulation", "water_valve"}:
             set_relay(name, on)
+            log_action("relay_changed", f"name={name}; on={on}", source="web_command")
             state["last_command_result"] = {
                 "ok": True,
                 "type": cmd_type,
@@ -488,7 +580,7 @@ def handle_command(config, state):
 
     elif cmd_type == "water_pulse":
         seconds = int(command.get("seconds", config.get("watering_seconds", 10)))
-        water_for_seconds(seconds)
+        water_for_seconds(seconds, reason="manual_web_pulse")
         state["last_command_result"] = {
             "ok": True,
             "type": cmd_type,
@@ -499,6 +591,11 @@ def handle_command(config, state):
     elif cmd_type == "set_automation":
         config["automation_enabled"] = bool(command.get("enabled", True))
         save_json(CONFIG_PATH, config)
+        log_action(
+            "automation_changed",
+            f"enabled={config['automation_enabled']}",
+            source="web_command",
+            )
         state["last_command_result"] = {
             "ok": True,
             "type": cmd_type,
@@ -519,6 +616,11 @@ def handle_command(config, state):
             key = "calibration_raw_dry" if calibration_type == "dry" else "calibration_raw_wet"
             config["soil_sensors"][sensor_index][key] = int(raw_value)
             save_json(CONFIG_PATH, config)
+            log_action(
+                "sensor_calibrated",
+                f"sensor_index={sensor_index}; type={calibration_type}; raw_value={raw_value}",
+                source="web_command",
+            )
             state["last_command_result"] = {
                 "ok": True,
                 "type": cmd_type,
@@ -561,11 +663,18 @@ def main():
         if state["automation_active"]:
             apply_fan_control(latest_climate, config)
 
+        now = time.time()
+        now_iso = datetime.now().isoformat(timespec="seconds")
+
         if now - last_sensor_read_ts >= int(config.get("sensor_read_interval_seconds", 30)):
             state["soil_sensors"] = read_soil_sensors(config)
             state["light_sensor"] = read_light_sensor(config)
-            state["light_sensor"]["light_class"] = light_class(state["light_sensor"].get("light_percent"))
+            state["light_sensor"]["light_class"] = light_class(
+                state["light_sensor"].get("light_percent")
+            )
+
             append_sensor_log(now_iso, state["soil_sensors"], state["light_sensor"])
+
             state["last_sensor_update"] = now_iso
             last_sensor_read_ts = now
 
@@ -575,7 +684,7 @@ def main():
 
                 if water_needed and state["automation_active"]:
                     seconds = int(config.get("watering_seconds", 10))
-                    water_for_seconds(seconds)
+                    water_for_seconds(seconds, reason=reason)
                     state["last_watering_at"] = datetime.now().isoformat(timespec="seconds")
                     state["last_watering_reason"] = reason
 
@@ -583,7 +692,7 @@ def main():
                     today = date.today().isoformat()
                     if state.get("last_fallback_watering_day") != today:
                         seconds = int(config.get("watering_fallback_seconds", 40))
-                        water_for_seconds(seconds)
+                        water_for_seconds(seconds, reason="daily_fallback_no_sensor_values")
                         state["last_watering_at"] = datetime.now().isoformat(timespec="seconds")
                         state["last_watering_reason"] = "daily_fallback_no_sensor_values"
                         state["last_fallback_watering_day"] = today
