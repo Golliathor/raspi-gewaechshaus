@@ -192,12 +192,13 @@ def load_config():
     if "soil_sensors" not in cfg or not isinstance(cfg["soil_sensors"], list):
         merged["soil_sensors"] = DEFAULT_CONFIG["soil_sensors"]
     else:
-        
         defaults = DEFAULT_CONFIG["soil_sensors"]
-        for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
+        sensors = []
+        for i in range(len(defaults)):
             base = defaults[i].copy()
             if i < len(cfg["soil_sensors"]) and isinstance(cfg["soil_sensors"][i], dict):
                 base.update(cfg["soil_sensors"][i])
+            base["index"] = i
             sensors.append(base)
         merged["soil_sensors"] = sensors
 
