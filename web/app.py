@@ -512,6 +512,7 @@ def config_page():
         config["automation_enabled"] = form.get("automation_enabled") == "on"
         config["watering_enabled"] = form.get("watering_enabled") == "on"
         config["adc_enabled"] = form.get("adc_enabled") == "on"
+        config["adc_type"] = form.get("adc_type", "ADS1115")
         config["camera_enabled"] = form.get("camera_enabled") == "on"
         config["camera_hflip"] = form.get("camera_hflip") == "on"
         config["camera_vflip"] = form.get("camera_vflip") == "on"
@@ -522,7 +523,9 @@ def config_page():
 
         config["camera_image_dir"] = form.get("camera_image_dir", config.get("camera_image_dir", "/home/grow/gewaechshaus/images"))
         config["camera_filename_pattern"] = form.get("camera_filename_pattern", config.get("camera_filename_pattern", "%Y-%m-%d_%H-%M-%S.jpg"))
-
+        adc_address = parse_float(form.get("adc_address"))
+        if adc_address is not None:
+            config["adc_address"] = int(adc_address)
         
         sensors = []
         for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
