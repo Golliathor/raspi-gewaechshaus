@@ -377,7 +377,7 @@ async function refreshDailySummaryChart() {
   const labels = data.map(r => r.date);
 
   const datasets = [
-    { label: "Lichtmenge (%·min)", data: data.map(r => r.light_sum_percent_minutes) },
+    { label: "Ø Licht am Tag (%)", data: data.map(r => r.avg_light_day) },
     { label: "Direkte Sonne (min)", data: data.map(r => r.direct_sun_minutes) },
     { label: "Ø Temp Tag (°C)", data: data.map(r => r.avg_temp_day_c) },
     { label: "Ø Temp Nacht (°C)", data: data.map(r => r.avg_temp_night_c) },
