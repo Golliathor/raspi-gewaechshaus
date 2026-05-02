@@ -20,6 +20,7 @@ LOG_DIR = "/home/grow/gewaechshaus/logs"
 SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
 CONFIG_LOG_PATH = "/home/grow/gewaechshaus/logs/config_aenderungen.csv"
+ACTION_LOG_PATH = "/home/grow/gewaechshaus/logs/actions.csv"
 
 DEFAULT_CONFIG = {
     "greenhouse_name": "Raspi-Gewächshaus",
@@ -38,6 +39,7 @@ DEFAULT_CONFIG = {
     "watering_enabled": True,
     "watering_seconds": 10,
     "watering_fallback_seconds": 40,
+    "water_flow_ml_per_second": 25,
 
     "timelapse_morning": "08:00",
     "timelapse_noon": "13:00",
@@ -430,7 +432,136 @@ def build_sensor_chart_data(points):
         "light_raw": [r["light_raw"] for r in rows],
         "light_class": [r["light_class"] for r in rows],
     }
+def read_action_rows():
+    if not os.path.exists(ACTION_LOG_PATH):
+        return []
 
+    rows = []
+    try:
+        with open(ACTION_LOG_PATH, "r", encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                ts = parse_timestamp(row.get("timestamp"))
+                if not ts:
+                    continue
+                rows.append({
+                    "timestamp": ts,
+                    "event": row.get("event", ""),
+                    "source": row.get("source", ""),
+                    "details": row.get("details", ""),
+                })
+    except Exception:
+        return []
+
+    return rows
+
+
+def build_daily_summary(days=14):
+    climate_rows = read_csv_rows(limit=None)
+    sensor_rows = read_sensor_csv_rows(limit=None)
+    action_rows = read_action_rows()
+    config = load_config()
+
+    flow = float(config.get("water_flow_ml_per_second", 25))
+    watering_seconds = float(config.get("watering_seconds", 10))
+
+    summaries = {}
+
+    def day_key(ts):
+        return ts.strftime("%Y-%m-%d")
+
+    for row in sensor_rows:
+        label = row.get("label")
+        # label enthält nur dd.mm. HH:MM, daher hier sensoren.csv nochmal direkt auswerten
+        pass
+
+    # Sensoren nochmal mit echten Zeitstempeln lesen
+    sensor_full = []
+    if os.path.exists(SENSOR_CSV_PATH):
+        with open(SENSOR_CSV_PATH, "r", encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                ts = parse_timestamp(row.get("timestamp"))
+                if not ts:
+                    continue
+                sensor_full.append({
+                    "timestamp": ts,
+                    "light": parse_float(row.get("light_percent")),
+                    "light_class": row.get("light_class", ""),
+                })
+
+    for r in sensor_full:
+        d = day_key(r["timestamp"])
+        s = summaries.setdefault(d, {
+            "date": d,
+            "light_sum_percent_minutes": 0,
+            "direct_sun_minutes": 0,
+            "temp_day_values": [],
+            "temp_night_values": [],
+            "watering_events": 0,
+            "water_ml": 0,
+        })
+
+        interval_min = config.get("sensor_read_interval_seconds", 30) / 60
+        light = r.get("light")
+
+        if light is not None:
+            s["light_sum_percent_minutes"] += light * interval_min
+
+        if r.get("light_class") == "direkte_sonne" or (light is not None and light >= 95):
+            s["direct_sun_minutes"] += interval_min
+
+    for r in climate_rows:
+        ts = r["timestamp"]
+        d = day_key(ts)
+        s = summaries.setdefault(d, {
+            "date": d,
+            "light_sum_percent_minutes": 0,
+            "direct_sun_minutes": 0,
+            "temp_day_values": [],
+            "temp_night_values": [],
+            "watering_events": 0,
+            "water_ml": 0,
+        })
+
+        # einfache Tag/Nacht-Regel über Uhrzeit
+        hour = ts.hour
+        if 7 <= hour < 21:
+            s["temp_day_values"].append(r["temperature_c"])
+        else:
+            s["temp_night_values"].append(r["temperature_c"])
+
+    for r in action_rows:
+        event = r["event"].lower()
+        details = r["details"].lower()
+        if "water" in event or "watering" in event or "bewässer" in event or "water" in details:
+            d = day_key(r["timestamp"])
+            s = summaries.setdefault(d, {
+                "date": d,
+                "light_sum_percent_minutes": 0,
+                "direct_sun_minutes": 0,
+                "temp_day_values": [],
+                "temp_night_values": [],
+                "watering_events": 0,
+                "water_ml": 0,
+            })
+            s["watering_events"] += 1
+            s["water_ml"] += watering_seconds * flow
+
+    result = []
+    for d in sorted(summaries.keys())[-days:]:
+        s = summaries[d]
+        day_vals = s.pop("temp_day_values")
+        night_vals = s.pop("temp_night_values")
+
+        s["light_sum_percent_minutes"] = round(s["light_sum_percent_minutes"], 1)
+        s["direct_sun_minutes"] = round(s["direct_sun_minutes"], 1)
+        s["avg_temp_day_c"] = round(sum(day_vals) / len(day_vals), 1) if day_vals else None
+        s["avg_temp_night_c"] = round(sum(night_vals) / len(night_vals), 1) if night_vals else None
+        s["water_ml"] = round(s["water_ml"], 1)
+
+        result.append(s)
+
+    return result
+    
 @app.route("/")
 def index():
     config = load_config()
@@ -453,6 +584,10 @@ def index():
         state=state,
     )
 
+@app.route("/api/daily_summary")
+def api_daily_summary():
+    days = request.args.get("days", default=14, type=int)
+    return jsonify(build_daily_summary(days))
 
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
@@ -533,19 +668,16 @@ def config_page():
             base["name"] = form.get(f"sensor_{i}_name", base["name"])
             base["enabled"] = form.get(f"sensor_{i}_enabled") == "on"
 
+            
             for sensor_key in ["channel", "dry_below_percent", "calibration_raw_dry", "calibration_raw_wet"]:
                 sensor_value = parse_float(form.get(f"sensor_{i}_{sensor_key}"))
                 if sensor_value is not None:
                     base[sensor_key] = int(sensor_value)
 
             sensors.append(base)
-
+        
         config["soil_sensors"] = sensors
-
-        config["light_sensor"]["name"] = form.get(
-            "light_sensor_name",
-            config["light_sensor"]["name"]
-        )
+        config["light_sensor"]["name"] = form.get("light_sensor_name",config["light_sensor"]["name"])
         config["light_sensor"]["enabled"] = form.get("light_sensor_enabled") == "on"
 
         for key in ["channel", "calibration_raw_dark", "calibration_raw_bright"]:
