@@ -505,10 +505,11 @@ def build_daily_summary(days=14):
 
         if light is not None:
             s["light_sum_percent_minutes"] += light * interval_min
-                if light > 10:
-                    s.setdefault("active_minutes", 0)
-                    s["active_minutes"] += interval_min
-                    
+
+            if light > 10:
+                s.setdefault("active_minutes", 0)
+                s["active_minutes"] += interval_min
+
         if r.get("light_class") == "direkte_sonne" or (light is not None and light >= 95):
             s["direct_sun_minutes"] += interval_min
 
