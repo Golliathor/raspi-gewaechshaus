@@ -505,7 +505,10 @@ def build_daily_summary(days=14):
 
         if light is not None:
             s["light_sum_percent_minutes"] += light * interval_min
-
+                if light > 10:
+                    s.setdefault("active_minutes", 0)
+                    s["active_minutes"] += interval_min
+                    
         if r.get("light_class") == "direkte_sonne" or (light is not None and light >= 95):
             s["direct_sun_minutes"] += interval_min
 
@@ -557,7 +560,12 @@ def build_daily_summary(days=14):
         s["avg_temp_day_c"] = round(sum(day_vals) / len(day_vals), 1) if day_vals else None
         s["avg_temp_night_c"] = round(sum(night_vals) / len(night_vals), 1) if night_vals else None
         s["water_ml"] = round(s["water_ml"], 1)
-
+        if s.get("active_minutes", 0) > 0:
+            s["avg_light_day"] = round(
+                s["light_sum_percent_minutes"] / (100 * s["active_minutes"]) * 100, 1
+            )
+        else:
+            s["avg_light_day"] = None
         result.append(s)
 
     return result
