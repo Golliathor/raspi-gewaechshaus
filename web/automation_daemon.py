@@ -44,6 +44,7 @@ DEFAULT_CONFIG = {
     "watering_enabled": True,
     "watering_seconds": 10,
     "watering_fallback_seconds": 40,
+    "water_flow_ml_per_second": 25,
 
     "timelapse_morning": "08:00",
     "timelapse_noon": "13:00",
