@@ -428,26 +428,22 @@ def get_ads1115(address=0x48):
 
 
 def read_adc_channel(address, channel):
-    if channel == 0:
-        pin = ADS.P0
-    elif channel == 1:
-        pin = ADS.P1
-    elif channel == 2:
-        pin = ADS.P2
-    elif channel == 3:
-        pin = ADS.P3
-    else:
+    try:
+        channel = int(channel)
+        if channel not in (0, 1, 2, 3):
+            return None
+
+        ads = get_ads1115(address)
+        chan = AnalogIn(ads, channel)
+        return chan.value
+    except Exception as e:
+        log_action("adc_read_error", f"channel={channel}; error={e}", source="automation")
         return None
-
-    ads = get_ads1115(address)
-    chan = AnalogIn(ads, pin)
-    return chan.value
-
 
 def read_soil_sensors(config):
     results = []
-    pcf_enabled = bool(config.get("adc_enabled", True))
-    address = int(config.get("pcf8591_address", 72))
+    adc_enabled = bool(config.get("adc_enabled", True))
+    address = int(config.get("adc_address", 72))
     sensors = config.get("soil_sensors", [])
 
     for idx, sensor in enumerate(sensors):
@@ -456,7 +452,7 @@ def read_soil_sensors(config):
         raw = None
         percent = None
 
-        if enabled and pcf_enabled:
+        if enabled and adc_enabled:
             raw = read_adc_channel(int(config.get("adc_address", 72)), channel)
             percent = raw_to_percent(
                 raw,
