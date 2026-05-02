@@ -455,121 +455,68 @@ def read_action_rows():
     return rows
 
 
-def build_daily_summary(days=14):
-    climate_rows = read_csv_rows(limit=None)
-    sensor_rows = read_sensor_csv_rows(limit=None)
-    action_rows = read_action_rows()
-    config = load_config()
+let climateLightChart = null;
+let waterSunChart = null;
 
-    flow = float(config.get("water_flow_ml_per_second", 25))
-    watering_seconds = float(config.get("watering_seconds", 10))
+async function refreshDailySummaryCharts() {
+  const response = await fetch("/api/daily_summary?days=14");
+  const data = await response.json();
 
-    summaries = {}
+  const labels = data.map(r => r.date);
 
-    def day_key(ts):
-        return ts.strftime("%Y-%m-%d")
+  // --- Klima & Licht ---
+  const ctx1 = document.getElementById("climateLightChart");
+  if (ctx1) {
+    const datasets1 = [
+      { label: "Ø Temp Tag (°C)", data: data.map(r => r.avg_temp_day_c) },
+      { label: "Ø Temp Nacht (°C)", data: data.map(r => r.avg_temp_night_c) },
+      { label: "Ø Licht am Tag (%)", data: data.map(r => r.avg_light_day) },
+      { label: "Lichtindex (%)", data: data.map(r => r.light_index) }
+    ];
 
-    for row in sensor_rows:
-        label = row.get("label")
-        # label enthält nur dd.mm. HH:MM, daher hier sensoren.csv nochmal direkt auswerten
-        pass
+    if (!climateLightChart) {
+      climateLightChart = new Chart(ctx1, {
+        type: "line",
+        data: { labels, datasets: datasets1 },
+        options: {
+          responsive: true,
+          interaction: { mode: "index", intersect: false }
+        }
+      });
+    } else {
+      climateLightChart.data.labels = labels;
+      climateLightChart.data.datasets = datasets1;
+      climateLightChart.update();
+    }
+  }
 
-    # Sensoren nochmal mit echten Zeitstempeln lesen
-    sensor_full = []
-    if os.path.exists(SENSOR_CSV_PATH):
-        with open(SENSOR_CSV_PATH, "r", encoding="utf-8", newline="") as f:
-            for row in csv.DictReader(f):
-                ts = parse_timestamp(row.get("timestamp"))
-                if not ts:
-                    continue
-                sensor_full.append({
-                    "timestamp": ts,
-                    "light": parse_float(row.get("light_percent")),
-                    "light_class": row.get("light_class", ""),
-                })
+  // --- Wasser & Sonne ---
+  const ctx2 = document.getElementById("waterSunChart");
+  if (ctx2) {
+    const datasets2 = [
+      { label: "Wasser (ml)", data: data.map(r => r.water_ml) },
+      { label: "Direkte Sonne (min)", data: data.map(r => r.direct_sun_minutes) }
+    ];
 
-    for r in sensor_full:
-        d = day_key(r["timestamp"])
-        s = summaries.setdefault(d, {
-            "date": d,
-            "light_sum_percent_minutes": 0,
-            "direct_sun_minutes": 0,
-            "temp_day_values": [],
-            "temp_night_values": [],
-            "watering_events": 0,
-            "water_ml": 0,
-        })
+    if (!waterSunChart) {
+      waterSunChart = new Chart(ctx2, {
+        type: "bar",
+        data: { labels, datasets: datasets2 },
+        options: {
+          responsive: true,
+          interaction: { mode: "index", intersect: false }
+        }
+      });
+    } else {
+      waterSunChart.data.labels = labels;
+      waterSunChart.data.datasets = datasets2;
+      waterSunChart.update();
+    }
+  }
+}
 
-        interval_min = config.get("sensor_read_interval_seconds", 30) / 60
-        light = r.get("light")
-
-        if light is not None:
-            s["light_sum_percent_minutes"] += light * interval_min
-
-            if light > 10:
-                s.setdefault("active_minutes", 0)
-                s["active_minutes"] += interval_min
-
-        if r.get("light_class") == "direkte_sonne" or (light is not None and light >= 95):
-            s["direct_sun_minutes"] += interval_min
-
-    for r in climate_rows:
-        ts = r["timestamp"]
-        d = day_key(ts)
-        s = summaries.setdefault(d, {
-            "date": d,
-            "light_sum_percent_minutes": 0,
-            "direct_sun_minutes": 0,
-            "temp_day_values": [],
-            "temp_night_values": [],
-            "watering_events": 0,
-            "water_ml": 0,
-        })
-
-        # einfache Tag/Nacht-Regel über Uhrzeit
-        hour = ts.hour
-        if 7 <= hour < 21:
-            s["temp_day_values"].append(r["temperature_c"])
-        else:
-            s["temp_night_values"].append(r["temperature_c"])
-
-    for r in action_rows:
-        event = r["event"].lower()
-        details = r["details"].lower()
-        if "water" in event or "watering" in event or "bewässer" in event or "water" in details:
-            d = day_key(r["timestamp"])
-            s = summaries.setdefault(d, {
-                "date": d,
-                "light_sum_percent_minutes": 0,
-                "direct_sun_minutes": 0,
-                "temp_day_values": [],
-                "temp_night_values": [],
-                "watering_events": 0,
-                "water_ml": 0,
-            })
-            s["watering_events"] += 1
-            s["water_ml"] += watering_seconds * flow
-
-    result = []
-    for d in sorted(summaries.keys())[-days:]:
-        s = summaries[d]
-        day_vals = s.pop("temp_day_values")
-        night_vals = s.pop("temp_night_values")
-
-        s["light_sum_percent_minutes"] = round(s["light_sum_percent_minutes"], 1)
-        s["direct_sun_minutes"] = round(s["direct_sun_minutes"], 1)
-        s["avg_temp_day_c"] = round(sum(day_vals) / len(day_vals), 1) if day_vals else None
-        s["avg_temp_night_c"] = round(sum(night_vals) / len(night_vals), 1) if night_vals else None
-        s["water_ml"] = round(s["water_ml"], 1)
-        if s.get("active_minutes", 0) > 0:
-            s["avg_light_day"] = round(
-                s["light_sum_percent_minutes"] / (100 * s["active_minutes"]) * 100, 1
-            )
-        else:
-            s["avg_light_day"] = None
-        result.append(s)
-
-    return result
+refreshDailySummaryCharts();
+setInterval(refreshDailySummaryCharts, {{ config.chart_refresh_seconds * 1000 }});
     
 @app.route("/")
 def index():
