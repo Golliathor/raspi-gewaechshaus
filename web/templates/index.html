@@ -440,7 +440,7 @@ async function refreshDailySummaryChart() {
     });
   } else {
     dailySummaryChart.data.labels = labels;
-    dailySummaryChart.data.datasets.forEach((ds, i) => ds.data = datasets[i].data);
+    dailySummaryChart.data.datasets = datasets;
     dailySummaryChart.update();
   }
 }
