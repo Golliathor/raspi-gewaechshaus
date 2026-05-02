@@ -54,7 +54,7 @@
         <div style="margin-top:12px;">
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
-          <label><input type="checkbox" name="pcf8591_enabled" {% if config.pcf8591_enabled %}checked{% endif %}> PCF8591 aktiv</label>
+          <label><input type="checkbox" name="pcf8591_enabled" {% if config.pcf8591_enabled %}checked{% endif %}> ADS1115 aktiv</label>
         </div>
       </div>
 
@@ -99,7 +99,7 @@
         <h2>PCF8591</h2>
         <div class="grid">
           <div>
-            <label>I2C-Adresse (dezimal)</label>
+            <label>I2C-Adresse ADS1115 (dezimal, 0x48 = 72)</label>
             <input name="pcf8591_address" type="number" value="{{ config.pcf8591_address }}">
           </div>
         </div>
