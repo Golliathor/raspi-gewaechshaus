@@ -364,48 +364,6 @@
 
     setInterval(refreshStatus, refreshSeconds * 1000);
     setInterval(refreshChart, chartRefreshSeconds * 1000);
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-let climateChart = null;
-
-async function loadChart() {
-    const loading = document.getElementById("chart-loading");
-
-    try {
-        const response = await fetch("/api/chart");
-        const data = await response.json();
-
-        loading.style.display = "none";
-
-        const ctx = document.getElementById("climateChart");
-
-        climateChart = new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: data.labels,
-                datasets: [
-                    {
-                        label: "Temperatur °C",
-                        data: data.temperature,
-                        tension: 0.2
-                    },
-                    {
-                        label: "Luftfeuchte %",
-                        data: data.humidity,
-                        tension: 0.2
-                    }
-                ]
-            }
-        });
-    } catch (error) {
-        loading.textContent = "Diagramm konnte nicht geladen werden.";
-        console.error(error);
-    }
-}
-
-window.addEventListener("load", loadChart);
 
 let dailySummaryChart = null;
 
