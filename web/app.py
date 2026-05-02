@@ -192,7 +192,7 @@ def load_config():
     if "soil_sensors" not in cfg or not isinstance(cfg["soil_sensors"], list):
         merged["soil_sensors"] = DEFAULT_CONFIG["soil_sensors"]
     else:
-        sensors = []
+        
         defaults = DEFAULT_CONFIG["soil_sensors"]
         for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
             base = defaults[i].copy()
@@ -522,6 +522,7 @@ def config_page():
         config["camera_image_dir"] = form.get("camera_image_dir", config.get("camera_image_dir", "/home/grow/gewaechshaus/images"))
         config["camera_filename_pattern"] = form.get("camera_filename_pattern", config.get("camera_filename_pattern", "%Y-%m-%d_%H-%M-%S.jpg"))
 
+        
         sensors = []
         for i in range(len(DEFAULT_CONFIG["soil_sensors"])):
             base = config["soil_sensors"][i].copy()
@@ -532,18 +533,21 @@ def config_page():
                 sensor_value = parse_float(form.get(f"sensor_{i}_{sensor_key}"))
                 if sensor_value is not None:
                     base[sensor_key] = int(sensor_value)
-                    
-        config["light_sensor"]["name"] = form.get("light_sensor_name", config["light_sensor"]["name"])
+
+            sensors.append(base)
+
+        config["soil_sensors"] = sensors
+
+        config["light_sensor"]["name"] = form.get(
+            "light_sensor_name",
+            config["light_sensor"]["name"]
+        )
         config["light_sensor"]["enabled"] = form.get("light_sensor_enabled") == "on"
 
         for key in ["channel", "calibration_raw_dark", "calibration_raw_bright"]:
             value = parse_float(form.get(f"light_sensor_{key}"))
             if value is not None:
                 config["light_sensor"][key] = int(value)
-            
-            sensors.append(base)
-
-        config["soil_sensors"] = sensors
         save_config(config, old_config)
 
         return redirect(url_for("config_page"))
