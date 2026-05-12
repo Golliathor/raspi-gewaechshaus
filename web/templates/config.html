@@ -64,6 +64,8 @@
           <div>
             <label>Normale Gießdauer (s)</label>
             <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
+            <label>Durchflussrate Wasser (ml/s)</label>
+            <input type="number" step="0.1" name="water_flow_ml_per_second" value="{{ config.water_flow_ml_per_second }}">
           </div>
           <div>
             <label>Fallback täglich (s)</label>
