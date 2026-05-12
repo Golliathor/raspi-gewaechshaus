@@ -15,6 +15,7 @@
     .value { font-size: 2rem; font-weight: bold; margin-top: 8px; }
     .muted { color: #6b7280; }
     .chart-card { margin-top: 16px; }
+    .chart-wrap {position: relative; height: 280px; width: 100%;} @media (max-width: 700px) {.chart-wrap {height: 220px;}}
     .relay-grid, .sensor-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 12px; }
     .relay-box, .sensor-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fafafa; }
     .status-on { color: #166534; font-weight: bold; }
@@ -130,7 +131,7 @@
         {% endfor %}
       </div>
     </div>
-    <div class="card" chart-card>
+    <div class="card chart-card">
       <h2>Licht</h2>
       {% set light = state.light_sensor or {} %}
       <div class="sensor-box">
@@ -146,16 +147,16 @@
       </div>
     </div>
 
-    <div class="card chart-card">
+    <div class="card chart-wrap">
       <h2>Sensorverlauf</h2>
       <canvas id="sensorChart"></canvas>
     </div>
-      <div class="card chart-card">
+      <div class="card chart-wrap">
         <h2>Verlauf</h2>
         <p id="chart-loading">Diagramm wird geladen...</p>
         <canvas id="climateChart"></canvas>
       </div>
-<div class="card chart-card">
+<div class="card chart-wrap">
   <h2>Klima & Licht</h2>
   <canvas id="climateLightChart"></canvas>
 </div>
@@ -393,9 +394,15 @@ async function refreshDailySummaryCharts() {
       climateLightChart = new Chart(ctx1, {
         type: "line",
         data: { labels, datasets: datasets1 },
-        options: {
+         options: {
           responsive: true,
-          interaction: { mode: "index", intersect: false }
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: {
+              position: "bottom"
+            }
+          }
         }
       });
     } else {
@@ -417,9 +424,15 @@ async function refreshDailySummaryCharts() {
       waterSunChart = new Chart(ctx2, {
         type: "bar",
         data: { labels, datasets: datasets2 },
-        options: {
+         options: {
           responsive: true,
-          interaction: { mode: "index", intersect: false }
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: {
+              position: "bottom"
+            }
+          }
         }
       });
     } else {
