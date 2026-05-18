@@ -28,6 +28,7 @@ DEFAULT_CONFIG = {
     "exhaust_temp_off_c": 25.0,
     "exhaust_humidity_on": 50.0,
     "exhaust_humidity_off": 40.0,
+    "exhaust_min_temp_c": 18.0,
     "circulation_temp_on_c": 24.0,
     "circulation_temp_off_c": 22.0,
     "circulation_humidity_on": 45.0,
