@@ -87,6 +87,8 @@
         <div class="grid">
           <div><label>Abluft Temp EIN</label><input name="exhaust_temp_on_c" type="number" step="0.1" value="{{ config.exhaust_temp_on_c }}"></div>
           <div><label>Abluft Temp AUS</label><input name="exhaust_temp_off_c" type="number" step="0.1" value="{{ config.exhaust_temp_off_c }}"></div>
+          <div><label>Mindesttemperatur für Abluft bei hoher Luftfeuchte (°C)</label>
+          <input type="number" step="0.1" name="exhaust_min_temp_c" value="{{ config.exhaust_min_temp_c }}"></div>
           <div><label>Abluft Feuchte EIN</label><input name="exhaust_humidity_on" type="number" step="0.1" value="{{ config.exhaust_humidity_on }}"></div>
           <div><label>Abluft Feuchte AUS</label><input name="exhaust_humidity_off" type="number" step="0.1" value="{{ config.exhaust_humidity_off }}"></div>
 
