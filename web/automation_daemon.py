@@ -34,6 +34,7 @@ DEFAULT_CONFIG = {
     "exhaust_temp_off_c": 25.0,
     "exhaust_humidity_on": 50.0,
     "exhaust_humidity_off": 40.0,
+    "exhaust_min_temp_c": 18.0,
 
     "circulation_temp_on_c": 24.0,
     "circulation_temp_off_c": 22.0,
@@ -483,6 +484,7 @@ def apply_fan_control(latest_values, config):
     temp = latest_values.get("temperature_c")
     hum = latest_values.get("humidity_percent")
 
+
     if temp is None or hum is None:
         return get_relay_state()
 
@@ -492,7 +494,8 @@ def apply_fan_control(latest_values, config):
     exhaust_temp_off = float(config.get("exhaust_temp_off_c", 25.0))
     exhaust_hum_on = float(config.get("exhaust_humidity_on", 50.0))
     exhaust_hum_off = float(config.get("exhaust_humidity_off", 40.0))
-
+    exhaust_min_temp_c = float(config.get("exhaust_min_temp_c", 18.0))
+    
     circulation_temp_on = float(config.get("circulation_temp_on_c", 24.0))
     circulation_temp_off = float(config.get("circulation_temp_off_c", 22.0))
     circulation_hum_on = float(config.get("circulation_humidity_on", 45.0))
@@ -500,13 +503,16 @@ def apply_fan_control(latest_values, config):
 
     exhaust_on = state["exhaust"]
     if exhaust_on:
-        if temp <= exhaust_temp_off and hum <= exhaust_hum_off:
+        if temp < exhaust_min_temp_c:
+            exhaust_on = False
+        elif temp <= exhaust_temp_off and hum <= exhaust_hum_off:
             exhaust_on = False
     else:
-        if temp >= exhaust_temp_on or hum >= exhaust_hum_on:
+        if temp >= exhaust_temp_on or (temp >= exhaust_min_temp_c and hum >= exhaust_hum_on):
             exhaust_on = True
 
     circulation_on = state["circulation"]
+    
     if circulation_on:
         if temp <= circulation_temp_off and hum <= circulation_hum_off:
             circulation_on = False
