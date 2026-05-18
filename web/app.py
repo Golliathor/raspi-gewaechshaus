@@ -584,6 +584,7 @@ def config_page():
         numeric_keys = [
             "exhaust_temp_on_c",
             "exhaust_temp_off_c",
+            "exhaust_min_temp_c",
             "exhaust_humidity_on",
             "exhaust_humidity_off",
             "circulation_temp_on_c",
