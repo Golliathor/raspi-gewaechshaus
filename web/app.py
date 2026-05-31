@@ -7,9 +7,18 @@ import zipfile
 from datetime import datetime
 from collections import deque
 
-from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request
+from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request, Compress
 
 app = Flask(__name__)
+
+app.config["COMPRESS_MIMETYPES"] = [
+    "text/html",
+    "text/css",
+    "application/json",
+    "application/javascript",
+]
+app.config["COMPRESS_LEVEL"] = 6
+Compress(app)
 
 BASE_DIR = "/home/grow/gewaechshaus/web"
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -21,6 +30,8 @@ SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
 TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
 CONFIG_LOG_PATH = "/home/grow/gewaechshaus/logs/config_aenderungen.csv"
 ACTION_LOG_PATH = "/home/grow/gewaechshaus/logs/actions.csv"
+DAILY_SUMMARY_JSON_PATH = "/home/grow/gewaechshaus/logs/daily_summary.json"
+DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS = 300
 
 DEFAULT_CONFIG = {
     "greenhouse_name": "Raspi-Gewächshaus",
@@ -92,6 +103,7 @@ DEFAULT_CONFIG = {
     "camera_hflip": False,
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
+    
 }
 
 
@@ -541,7 +553,54 @@ def build_daily_summary(days=14):
         result.append(s)
 
     return result
+    
+def file_mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
 
+
+def daily_summary_source_signature():
+    return {
+        "klima_mtime": file_mtime(CSV_PATH),
+        "sensoren_mtime": file_mtime(SENSOR_CSV_PATH),
+        "actions_mtime": file_mtime(ACTION_LOG_PATH),
+        "config_mtime": file_mtime(CONFIG_PATH),
+    }
+
+
+def load_daily_summary_cache(days):
+    cache = load_json(DAILY_SUMMARY_JSON_PATH, {})
+
+    try:
+        created_at = datetime.fromisoformat(cache.get("created_at", ""))
+        cache_age_seconds = (datetime.now() - created_at).total_seconds()
+    except Exception:
+        cache_age_seconds = None
+
+    if (
+        cache.get("days") == days
+        and isinstance(cache.get("data"), list)
+        and cache_age_seconds is not None
+        and cache_age_seconds < DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS
+    ):
+        return cache["data"]
+
+    data = build_daily_summary(days)
+
+    os.makedirs(os.path.dirname(DAILY_SUMMARY_JSON_PATH), exist_ok=True)
+    save_json(
+        DAILY_SUMMARY_JSON_PATH,
+        {
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "days": days,
+            "max_age_seconds": DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS,
+            "data": data,
+        },
+    )
+
+    return data
 
 @app.route("/")
 def index():
@@ -569,7 +628,15 @@ def index():
 @app.route("/api/daily_summary")
 def api_daily_summary():
     days = request.args.get("days", default=14, type=int)
-    return jsonify(build_daily_summary(days))
+
+    if days < 1:
+        days = 1
+    if days > 365:
+        days = 365
+
+    response = jsonify(load_daily_summary_cache(days))
+    response.headers["Cache-Control"] = "private, max-age=60"
+    return response
 
 
 @app.route("/config", methods=["GET", "POST"])
