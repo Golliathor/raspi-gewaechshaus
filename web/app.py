@@ -7,7 +7,8 @@ import zipfile
 from datetime import datetime
 from collections import deque
 
-from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request, Compress
+from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request
+from flask_compress import Compress
 
 app = Flask(__name__)
 
