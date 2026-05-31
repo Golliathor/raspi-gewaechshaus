@@ -32,7 +32,6 @@ TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
 CONFIG_LOG_PATH = "/home/grow/gewaechshaus/logs/config_aenderungen.csv"
 ACTION_LOG_PATH = "/home/grow/gewaechshaus/logs/actions.csv"
 DAILY_SUMMARY_JSON_PATH = "/home/grow/gewaechshaus/logs/daily_summary.json"
-DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS = 300
 
 DEFAULT_CONFIG = {
     "greenhouse_name": "Raspi-Gewächshaus",
@@ -56,6 +55,9 @@ DEFAULT_CONFIG = {
     "refresh_seconds": 15,
     "chart_refresh_seconds": 60,
     "chart_points": 200,
+    "daily_summary_days": 14,
+    "daily_summary_cache_max_age_seconds": 300,
+    "daily_summary_row_safety_factor": 2,
     "adc_enabled": True,
     "adc_type": "ADS1115",
     "adc_address": 72,
@@ -407,6 +409,7 @@ def read_sensor_csv_rows(limit=None):
                     continue
 
                 rows.append({
+                    "timestamp": ts,
                     "label": ts.strftime("%d.%m. %H:%M"),
                     "soil1": parse_float(row.get("soil1_percent")),
                     "soil2": parse_float(row.get("soil2_percent")),
@@ -434,33 +437,73 @@ def build_sensor_chart_data(points):
     }
 
 
-def read_action_rows():
+def read_action_rows(limit=None):
     if not os.path.exists(ACTION_LOG_PATH):
         return []
 
     rows = []
+
     try:
         with open(ACTION_LOG_PATH, "r", encoding="utf-8", newline="") as f:
-            for row in csv.DictReader(f):
+            if limit is None:
+                source_rows = csv.DictReader(f)
+            else:
+                header = f.readline()
+                last_lines = deque(f, maxlen=limit)
+                source_rows = csv.DictReader([header] + list(last_lines))
+
+            for row in source_rows:
                 ts = parse_timestamp(row.get("timestamp"))
                 if not ts:
                     continue
+
                 rows.append({
                     "timestamp": ts,
                     "event": row.get("event", ""),
                     "source": row.get("source", ""),
                     "details": row.get("details", ""),
                 })
+
     except Exception:
         return []
 
     return rows
 
+def estimate_log_rows_for_days(days, interval_seconds, safety_factor=2, minimum=500):
+    try:
+        days = int(days)
+        interval_seconds = int(interval_seconds)
+        safety_factor = int(safety_factor)
+    except Exception:
+        return minimum
 
+    if days < 1:
+        days = 1
+
+    if interval_seconds < 1:
+        interval_seconds = 30
+
+    if safety_factor < 1:
+        safety_factor = 1
+
+    rows = int((days * 24 * 60 * 60 / interval_seconds) * safety_factor)
+    return max(minimum, rows)
+    
 def build_daily_summary(days=14):
-    climate_rows = read_csv_rows(limit=None)
-    action_rows = read_action_rows()
     config = load_config()
+
+    interval_seconds = int(config.get("sensor_read_interval_seconds", 30))
+    safety_factor = int(config.get("daily_summary_row_safety_factor", 2))
+
+    row_limit = estimate_log_rows_for_days(
+        days=days,
+        interval_seconds=interval_seconds,
+        safety_factor=safety_factor,
+    )
+
+    climate_rows = read_csv_rows(limit=row_limit)
+    sensor_rows = read_sensor_csv_rows(limit=row_limit)
+    action_rows = read_action_rows(limit=2000)
 
     flow = float(config.get("water_flow_ml_per_second", 25))
     watering_seconds = float(config.get("watering_seconds", 10))
@@ -483,29 +526,24 @@ def build_daily_summary(days=14):
     def day_key(ts):
         return ts.strftime("%Y-%m-%d")
 
-    if os.path.exists(SENSOR_CSV_PATH):
-        try:
-            with open(SENSOR_CSV_PATH, "r", encoding="utf-8", newline="") as f:
-                for row in csv.DictReader(f):
-                    ts = parse_timestamp(row.get("timestamp"))
-                    if not ts:
-                        continue
+    for row in sensor_rows:
+        ts = row.get("timestamp")
+        if not ts:
+            continue
+    
+        d = day_key(ts)
+        s = summaries.setdefault(d, empty_summary(d))
 
-                    d = day_key(ts)
-                    s = summaries.setdefault(d, empty_summary(d))
+        light = row.get("light")
+        light_class = row.get("light_class", "")
 
-                    light = parse_float(row.get("light_percent"))
-                    light_class = row.get("light_class", "")
+        if light is not None:
+            s["light_sum_percent_minutes"] += light * interval_min
+            if light > 10:
+                s["active_minutes"] += interval_min
 
-                    if light is not None:
-                        s["light_sum_percent_minutes"] += light * interval_min
-                        if light > 10:
-                            s["active_minutes"] += interval_min
-
-                    if light_class == "direkte_sonne" or (light is not None and light >= 95):
-                        s["direct_sun_minutes"] += interval_min
-        except Exception:
-            pass
+        if light_class == "direkte_sonne" or (light is not None and light >= 95):
+            s["direct_sun_minutes"] += interval_min
 
     for r in climate_rows:
         ts = r["timestamp"]
@@ -572,6 +610,9 @@ def daily_summary_source_signature():
 
 
 def load_daily_summary_cache(days):
+    config = load_config()
+    max_age_seconds = int(config.get("daily_summary_cache_max_age_seconds", 300))
+
     cache = load_json(DAILY_SUMMARY_JSON_PATH, {})
 
     try:
@@ -582,9 +623,10 @@ def load_daily_summary_cache(days):
 
     if (
         cache.get("days") == days
+        and cache.get("max_age_seconds") == max_age_seconds
         and isinstance(cache.get("data"), list)
         and cache_age_seconds is not None
-        and cache_age_seconds < DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS
+        and cache_age_seconds < max_age_seconds
     ):
         return cache["data"]
 
@@ -596,7 +638,7 @@ def load_daily_summary_cache(days):
         {
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "days": days,
-            "max_age_seconds": DAILY_SUMMARY_CACHE_MAX_AGE_SECONDS,
+            "max_age_seconds": max_age_seconds,
             "data": data,
         },
     )
@@ -628,7 +670,10 @@ def index():
 
 @app.route("/api/daily_summary")
 def api_daily_summary():
-    days = request.args.get("days", default=14, type=int)
+    config = load_config()
+
+    default_days = int(config.get("daily_summary_days", 14))
+    days = request.args.get("days", default=default_days, type=int)
 
     if days < 1:
         days = 1
