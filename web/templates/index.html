@@ -406,6 +406,7 @@ function makeChart(labels, temps, hums) {
 let dailyClimateChart = null;
 let dailyWaterChart = null;
 let dailySunChart = null;
+let dailySunChart = null;
 
 async function refreshDailySummaryCharts() {
   const response = await fetch("/api/daily_summary");
@@ -419,7 +420,46 @@ async function refreshDailySummaryCharts() {
 
   const waterMl = data.map(row => row.water_ml);
   const directSunMinutes = data.map(row => row.direct_sun_minutes);
-
+  const lightIndex = data.map(row => row.light_index);
+  
+  if (dailyLightIndexChart) {
+  dailyLightIndexChart.data.labels = labels;
+  dailyLightIndexChart.data.datasets[0].data = lightIndex;
+  dailyLightIndexChart.update("none");
+} else {
+  dailyLightIndexChart = new Chart(
+    document.getElementById("dailyLightIndexChart"),
+    {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Lichtindex (%)",
+            data: lightIndex,
+            borderColor: "#ffc107",
+            backgroundColor: "rgba(255, 193, 7, 0.35)"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: "Lichtindex (%)"
+            }
+          }
+        }
+      }
+    }
+  );
+}
   if (dailyClimateChart) {
     dailyClimateChart.data.labels = labels;
     dailyClimateChart.data.datasets[0].data = avgTempDay;
