@@ -157,13 +157,18 @@
         <canvas id="climateChart"></canvas>
       </div>
 <div class="card chart-card">
-  <h2>Klima & Licht</h2>
-  <canvas id="climateLightChart"></canvas>
+  <h2>Klima</h2>
+<canvas id="dailyClimateChart"></canvas>
 </div>
 
 <div class="card chart-card">
-  <h2>Wasser & Sonne</h2>
-  <canvas id="waterSunChart"></canvas>
+  <h2>Wasserverbrauch</h2>
+<canvas id="dailyWaterChart"></canvas>
+</div>
+
+<div class="card chart-card">
+ <h2>Direkte Sonne</h2>
+<canvas id="dailySunChart"></canvas>
 </div>
     
    <div class="card chart-card">
@@ -371,75 +376,160 @@
     setInterval(refreshStatus, refreshSeconds * 1000);
     setInterval(refreshChart, chartRefreshSeconds * 1000);
 
-let climateLightChart = null;
-let waterSunChart = null;
+let dailyClimateChart = null;
+let dailyWaterChart = null;
+let dailySunChart = null;
 
 async function refreshDailySummaryCharts() {
-  const response = await fetch("/api/daily_summary?days=14");
+  const response = await fetch("/api/daily_summary");
   const data = await response.json();
 
-  const labels = data.map(r => r.date);
+  const labels = data.map(row => row.date);
 
-  // --- Klima & Licht ---
-  const ctx1 = document.getElementById("climateLightChart");
-  if (ctx1) {
-    const datasets1 = [
-      { label: "Ø Temp Tag (°C)", data: data.map(r => r.avg_temp_day_c) },
-      { label: "Ø Temp Nacht (°C)", data: data.map(r => r.avg_temp_night_c) },
-      { label: "Ø Licht am Tag (%)", data: data.map(r => r.avg_light_day) },
-      { label: "Lichtindex (%)", data: data.map(r => r.light_index) }
-    ];
+  const avgTempDay = data.map(row => row.avg_temp_day_c);
+  const avgTempNight = data.map(row => row.avg_temp_night_c);
+  const avgHumidity = data.map(row => row.avg_humidity_percent);
 
-    if (!climateLightChart) {
-      climateLightChart = new Chart(ctx1, {
+  const waterMl = data.map(row => row.water_ml);
+  const directSunMinutes = data.map(row => row.direct_sun_minutes);
+
+  if (dailyClimateChart) {
+    dailyClimateChart.data.labels = labels;
+    dailyClimateChart.data.datasets[0].data = avgTempDay;
+    dailyClimateChart.data.datasets[1].data = avgTempNight;
+    dailyClimateChart.data.datasets[2].data = avgHumidity;
+    dailyClimateChart.update("none");
+  } else {
+    dailyClimateChart = new Chart(
+      document.getElementById("dailyClimateChart"),
+      {
         type: "line",
-        data: { labels, datasets: datasets1 },
-         options: {
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Ø Temperatur Tag (°C)",
+              data: avgTempDay,
+              yAxisID: "yTemp",
+              tension: 0.25,
+            },
+            {
+              label: "Ø Temperatur Nacht (°C)",
+              data: avgTempNight,
+              yAxisID: "yTemp",
+              tension: 0.25,
+            },
+            {
+              label: "Ø Luftfeuchte (%)",
+              data: avgHumidity,
+              yAxisID: "yPercent",
+              tension: 0.25,
+            },
+          ],
+        },
+        options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom"
-            }
-          }
-        }
-      });
-    } else {
-      climateLightChart.data.labels = labels;
-      climateLightChart.data.datasets = datasets1;
-      climateLightChart.update();
-    }
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          scales: {
+            yTemp: {
+              type: "linear",
+              position: "left",
+              title: {
+                display: true,
+                text: "Temperatur (°C)",
+              },
+            },
+            yPercent: {
+              type: "linear",
+              position: "right",
+              min: 0,
+              max: 100,
+              title: {
+                display: true,
+                text: "Luftfeuchte (%)",
+              },
+              grid: {
+                drawOnChartArea: false,
+              },
+            },
+          },
+        },
+      }
+    );
   }
 
-  // --- Wasser & Sonne ---
-  const ctx2 = document.getElementById("waterSunChart");
-  if (ctx2) {
-    const datasets2 = [
-      { label: "Wasser (ml)", data: data.map(r => r.water_ml) },
-      { label: "Direkte Sonne (min)", data: data.map(r => r.direct_sun_minutes) }
-    ];
-
-    if (!waterSunChart) {
-      waterSunChart = new Chart(ctx2, {
+  if (dailyWaterChart) {
+    dailyWaterChart.data.labels = labels;
+    dailyWaterChart.data.datasets[0].data = waterMl;
+    dailyWaterChart.update("none");
+  } else {
+    dailyWaterChart = new Chart(
+      document.getElementById("dailyWaterChart"),
+      {
         type: "bar",
-        data: { labels, datasets: datasets2 },
-         options: {
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Wasserverbrauch (ml)",
+              data: waterMl,
+            },
+          ],
+        },
+        options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom"
-            }
-          }
-        }
-      });
-    } else {
-      waterSunChart.data.labels = labels;
-      waterSunChart.data.datasets = datasets2;
-      waterSunChart.update();
-    }
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Wasser (ml)",
+              },
+            },
+          },
+        },
+      }
+    );
+  }
+
+  if (dailySunChart) {
+    dailySunChart.data.labels = labels;
+    dailySunChart.data.datasets[0].data = directSunMinutes;
+    dailySunChart.update("none");
+  } else {
+    dailySunChart = new Chart(
+      document.getElementById("dailySunChart"),
+      {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Direkte Sonne (min)",
+              data: directSunMinutes,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: "Direkte Sonne (min)",
+              },
+            },
+          },
+        },
+      }
+    );
   }
 }
 
