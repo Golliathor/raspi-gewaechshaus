@@ -516,9 +516,9 @@ def build_daily_summary(days=14):
             "date": date_key,
             "light_sum_percent_minutes": 0,
             "direct_sun_minutes": 0,
-            "active_minutes": 0,
             "temp_day_values": [],
             "temp_night_values": [],
+            "humidity_values": [],
             "watering_events": 0,
             "water_ml": 0,
         }
@@ -555,6 +555,9 @@ def build_daily_summary(days=14):
             s["temp_day_values"].append(r["temperature_c"])
         else:
             s["temp_night_values"].append(r["temperature_c"])
+            
+        if r.get("humidity_percent") is not None:
+            s["humidity_values"].append(r["humidity_percent"])
 
     for r in action_rows:
         event = r["event"].lower()
@@ -571,16 +574,19 @@ def build_daily_summary(days=14):
         day_vals = s.pop("temp_day_values")
         night_vals = s.pop("temp_night_values")
         active_minutes = s.pop("active_minutes", 0)
+        humidity_vals = s.pop("humidity_values")
 
         s["light_sum_percent_minutes"] = round(s["light_sum_percent_minutes"], 1)
         s["direct_sun_minutes"] = round(s["direct_sun_minutes"], 1)
         s["avg_temp_day_c"] = round(sum(day_vals) / len(day_vals), 1) if day_vals else None
         s["avg_temp_night_c"] = round(sum(night_vals) / len(night_vals), 1) if night_vals else None
+        s["avg_humidity_percent"] = round(sum(humidity_vals) / len(humidity_vals), 1) if humidity_vals else None
         s["water_ml"] = round(s["water_ml"], 1)
 
         max_light = 100 * 24 * 60
         s["light_index"] = round(s["light_sum_percent_minutes"] / max_light * 100, 1)
-
+        s.pop("light_sum_percent_minutes", None)
+        
         if active_minutes > 0:
             s["avg_light_day"] = round(
                 s["light_sum_percent_minutes"] / (100 * active_minutes) * 100,
