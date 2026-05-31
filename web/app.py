@@ -573,27 +573,19 @@ def build_daily_summary(days=14):
         s = summaries[d]
         day_vals = s.pop("temp_day_values")
         night_vals = s.pop("temp_night_values")
-        active_minutes = s.pop("active_minutes", 0)
-        humidity_vals = s.pop("humidity_values")
-
-        s["light_sum_percent_minutes"] = round(s["light_sum_percent_minutes"], 1)
+        humidity_vals = s.pop("humidity_values", [])
+        
         s["direct_sun_minutes"] = round(s["direct_sun_minutes"], 1)
         s["avg_temp_day_c"] = round(sum(day_vals) / len(day_vals), 1) if day_vals else None
         s["avg_temp_night_c"] = round(sum(night_vals) / len(night_vals), 1) if night_vals else None
         s["avg_humidity_percent"] = round(sum(humidity_vals) / len(humidity_vals), 1) if humidity_vals else None
         s["water_ml"] = round(s["water_ml"], 1)
-
+        
         max_light = 100 * 24 * 60
         s["light_index"] = round(s["light_sum_percent_minutes"] / max_light * 100, 1)
         s.pop("light_sum_percent_minutes", None)
-        
-        if active_minutes > 0:
-            s["avg_light_day"] = round(
-                s["light_sum_percent_minutes"] / (100 * active_minutes) * 100,
-                1,
-            )
-        else:
-            s["avg_light_day"] = None
+        s.pop("active_minutes", None)
+
 
         result.append(s)
 
