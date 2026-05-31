@@ -49,6 +49,38 @@
             <label>Diagramm-Punkte</label>
             <input name="chart_points" type="number" value="{{ config.chart_points }}">
           </div>
+          <label>
+  Tagesdiagramm-Zeitraum (Tage)
+  <input
+    type="number"
+    name="daily_summary_days"
+    value="{{ config.daily_summary_days }}"
+    min="1"
+    max="365"
+  >
+</label>
+
+<label>
+  Tagesdiagramm-Cache (s)
+  <input
+    type="number"
+    name="daily_summary_cache_max_age_seconds"
+    value="{{ config.daily_summary_cache_max_age_seconds }}"
+    min="0"
+    max="86400"
+  >
+</label>
+
+<label>
+  Tagesdiagramm-Sicherheitsfaktor
+  <input
+    type="number"
+    name="daily_summary_row_safety_factor"
+    value="{{ config.daily_summary_row_safety_factor }}"
+    min="1"
+    max="10"
+  >
+</label>
         </div>
 
         <div style="margin-top:12px;">
