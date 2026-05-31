@@ -406,7 +406,8 @@ function makeChart(labels, temps, hums) {
 let dailyClimateChart = null;
 let dailyWaterChart = null;
 let dailySunChart = null;
-let dailySunChart = null;
+let dailyLightIndexChart = null;
+
 
 async function refreshDailySummaryCharts() {
   const response = await fetch("/api/daily_summary");
