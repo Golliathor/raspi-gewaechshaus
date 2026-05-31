@@ -718,6 +718,9 @@ def config_page():
             "camera_quality",
             "camera_rotation",
             "camera_timeout_ms",
+            "daily_summary_days",
+            "daily_summary_cache_max_age_seconds",
+            "daily_summary_row_safety_factor",
         ]
 
         int_keys = {
@@ -734,6 +737,9 @@ def config_page():
             "camera_quality",
             "camera_rotation",
             "camera_timeout_ms",
+            "daily_summary_days",
+            "daily_summary_cache_max_age_seconds",
+            "daily_summary_row_safety_factor",
         }
 
         for key in numeric_keys:
