@@ -23,6 +23,7 @@ from greenhouse.config import (
     load_config as load_project_config,
     validate_config,
 )
+from greenhouse.controllers import registered_controller_ids
 
 app = Flask(__name__)
 
@@ -151,7 +152,7 @@ def load_state():
         "last_sensor_update": None,
         "last_watering_at": None,
         "last_watering_reason": None,
-        "active_controller": "legacy",
+        "active_controller": DEFAULT_CONFIG["controller"]["active"],
         "last_decision_reasons": [],
         "last_safety_overrides": [],
         "run_id": None,
@@ -612,6 +613,11 @@ def config_page():
     if request.method == "POST":
         form = request.form
         config["greenhouse_name"] = form.get("greenhouse_name", config["greenhouse_name"])
+        requested_controller = form.get(
+            "controller_active", config["controller"]["active"]
+        )
+        if requested_controller in registered_controller_ids():
+            config["controller"]["active"] = requested_controller
 
         numeric_keys = [
             "exhaust_temp_on_c",
@@ -734,6 +740,11 @@ def config_page():
                 if value is not None:
                     config[section][key] = value
 
+        for key in DEFAULT_CONFIG["controllers"]["adaptive_local"]:
+            value = parse_float(form.get(f"adaptive_local_{key}"))
+            if value is not None:
+                config["controllers"]["adaptive_local"][key] = value
+
         try:
             save_config(config, old_config)
         except ValueError as error:
@@ -745,6 +756,7 @@ def config_page():
                 state=state,
                 latest=latest,
                 config_error=str(error),
+                controller_ids=registered_controller_ids(),
             ), 400
         return redirect(url_for("config_page"))
 
@@ -756,6 +768,7 @@ def config_page():
         config=config,
         state=state,
         latest=latest,
+        controller_ids=registered_controller_ids(),
     )
 
 
@@ -783,7 +796,10 @@ def api_status():
         "last_watering_at": state.get("last_watering_at"),
         "last_watering_reason": state.get("last_watering_reason"),
         "active_controller": state.get(
-            "active_controller", config.get("controller", {}).get("active", "legacy")
+            "active_controller",
+            config.get("controller", {}).get(
+                "active", DEFAULT_CONFIG["controller"]["active"]
+            ),
         ),
         "last_decision_reasons": state.get("last_decision_reasons", []),
         "last_safety_overrides": state.get("last_safety_overrides", []),

@@ -11,7 +11,7 @@
     .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
     .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     label { display: block; font-size: 0.95rem; margin-bottom: 4px; }
-    input[type="text"], input[type="number"], input[type="time"] {
+    input[type="text"], input[type="number"], input[type="time"], select {
       width: 100%;
       box-sizing: border-box;
       padding: 10px;
@@ -91,21 +91,71 @@
         <div style="margin-top:12px;">
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
-          <div>Aktiver Controller: <strong>{{ config.controller.active }}</strong></div>
+          <label for="controllerActive">Aktiver Controller</label>
+          <select id="controllerActive" name="controller_active">
+            {% for controller_id in controller_ids %}
+            <option value="{{ controller_id }}" {% if controller_id == config.controller.active %}selected{% endif %}>{{ controller_id }}</option>
+            {% endfor %}
+          </select>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Ansatz A: adaptive lokale Regelung</h2>
+        <h3>Abluft und Umluft</h3>
+        <div class="grid">
+          <div><label>Abluft Temperatur EIN (°C)</label><input name="adaptive_local_exhaust_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_temperature_on_c }}"></div>
+          <div><label>Abluft Temperatur AUS (°C)</label><input name="adaptive_local_exhaust_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_temperature_off_c }}"></div>
+          <div><label>Abluft Feuchte EIN (%)</label><input name="adaptive_local_exhaust_humidity_on_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_humidity_on_percent }}"></div>
+          <div><label>Abluft Feuchte AUS (%)</label><input name="adaptive_local_exhaust_humidity_off_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_humidity_off_percent }}"></div>
+          <div><label>Abluft Mindesttemperatur (°C)</label><input name="adaptive_local_exhaust_min_temperature_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_min_temperature_c }}"></div>
+          <div><label>Abluft Mindest-EIN (s)</label><input name="adaptive_local_exhaust_min_on_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.exhaust_min_on_seconds }}"></div>
+          <div><label>Abluft Mindest-AUS (s)</label><input name="adaptive_local_exhaust_min_off_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.exhaust_min_off_seconds }}"></div>
+          <div><label>Umluft Temperatur EIN (°C)</label><input name="adaptive_local_circulation_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.circulation_temperature_on_c }}"></div>
+          <div><label>Umluft Temperatur AUS (°C)</label><input name="adaptive_local_circulation_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.circulation_temperature_off_c }}"></div>
+          <div><label>Umluft Feuchte EIN (%)</label><input name="adaptive_local_circulation_humidity_on_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.circulation_humidity_on_percent }}"></div>
+          <div><label>Umluft Feuchte AUS (%)</label><input name="adaptive_local_circulation_humidity_off_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.circulation_humidity_off_percent }}"></div>
+          <div><label>Umluft Mindest-EIN (s)</label><input name="adaptive_local_circulation_min_on_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.circulation_min_on_seconds }}"></div>
+          <div><label>Umluft Mindest-AUS (s)</label><input name="adaptive_local_circulation_min_off_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.circulation_min_off_seconds }}"></div>
+        </div>
+        <h3>Trend und Lichtanpassung</h3>
+        <div class="grid">
+          <div><label>Trendfenster (s)</label><input name="adaptive_local_trend_window_seconds" type="number" min="1" step="1" value="{{ config.controllers.adaptive_local.trend_window_seconds }}"></div>
+          <div><label>Mindest-Trendspanne (s)</label><input name="adaptive_local_trend_minimum_span_seconds" type="number" min="1" step="1" value="{{ config.controllers.adaptive_local.trend_minimum_span_seconds }}"></div>
+          <div><label>Vorausschau (min)</label><input name="adaptive_local_trend_lookahead_minutes" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_local.trend_lookahead_minutes }}"></div>
+          <div><label>Max. Temperaturtrend (°C/min)</label><input name="adaptive_local_max_abs_temperature_trend_per_minute" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_abs_temperature_trend_per_minute }}"></div>
+          <div><label>Max. Feuchtetrend (%/min)</label><input name="adaptive_local_max_abs_humidity_trend_per_minute" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_abs_humidity_trend_per_minute }}"></div>
+          <div><label>Max. Bodentrend (%/min)</label><input name="adaptive_local_max_abs_soil_trend_per_minute" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_abs_soil_trend_per_minute }}"></div>
+          <div><label>Lichtanpassung ab (%)</label><input name="adaptive_local_light_adaptation_start_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.adaptive_local.light_adaptation_start_percent }}"></div>
+          <div><label>Lichtbedingte Absenkung (°C)</label><input name="adaptive_local_light_temperature_reduction_c" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.light_temperature_reduction_c }}"></div>
+          <div><label>Max. Temperaturabsenkung (°C)</label><input name="adaptive_local_max_temperature_reduction_c" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_temperature_reduction_c }}"></div>
+          <div><label>Max. Feuchteabsenkung (%)</label><input name="adaptive_local_max_humidity_reduction_percent" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_humidity_reduction_percent }}"></div>
+        </div>
+        <h3>Adaptive Bewässerung</h3>
+        <div class="grid">
+          <div><label>Bodenfeuchte Basis-EIN (%)</label><input name="adaptive_local_soil_moisture_on_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.soil_moisture_on_percent }}"></div>
+          <div><label>Wiederfreigabe ab (%)</label><input name="adaptive_local_soil_moisture_off_percent" type="number" step="0.1" value="{{ config.controllers.adaptive_local.soil_moisture_off_percent }}"></div>
+          <div><label>Max. adaptive Grenzerhöhung (%)</label><input name="adaptive_local_max_soil_threshold_increase_percent" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_local.max_soil_threshold_increase_percent }}"></div>
+          <div><label>Temperaturreferenz (°C)</label><input name="adaptive_local_watering_temperature_reference_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.watering_temperature_reference_c }}"></div>
+          <div><label>Basis-Gießdauer (s)</label><input name="adaptive_local_watering_base_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_local.watering_base_seconds }}"></div>
+          <div><label>Min. Gießdauer (s)</label><input name="adaptive_local_watering_min_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_local.watering_min_seconds }}"></div>
+          <div><label>Max. Gießdauer (s)</label><input name="adaptive_local_watering_max_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_local.watering_max_seconds }}"></div>
+          <div><label>Bewässerungs-Sperrzeit (s)</label><input name="adaptive_local_watering_cooldown_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.watering_cooldown_seconds }}"></div>
+        </div>
+        <p>Wetterdaten werden in Ansatz A nicht verwendet. Alle Anpassungen erscheinen im Entscheidungslog.</p>
       </div>
 
       <div class="card">
         <h2>Bewässerung</h2>
         <div class="grid">
           <div>
-            <label>Normale Gießdauer (s)</label>
+            <label>Legacy-/manuelle Gießdauer (s)</label>
             <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
             <label>Durchflussrate Wasser (ml/s)</label>
             <input type="number" step="0.1" name="water_flow_ml_per_second" value="{{ config.water_flow_ml_per_second }}">
           </div>
           <div>
-            <label>Fallback täglich (s)</label>
+            <label>Legacy-Fallback täglich (s)</label>
             <input name="watering_fallback_seconds" type="number" value="{{ config.watering_fallback_seconds }}">
           </div>
           <div>
@@ -120,7 +170,7 @@
       </div>
 
       <div class="card">
-        <h2>Lüfter</h2>
+        <h2>Legacy-Regler: Lüfter</h2>
         <div class="grid">
           <div><label>Abluft Temp EIN</label><input name="exhaust_temp_on_c" type="number" step="0.1" value="{{ config.exhaust_temp_on_c }}"></div>
           <div><label>Abluft Temp AUS</label><input name="exhaust_temp_off_c" type="number" step="0.1" value="{{ config.exhaust_temp_off_c }}"></div>

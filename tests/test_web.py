@@ -38,7 +38,7 @@ class WebTests(unittest.TestCase):
         response = self.client.get("/api/status")
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertEqual(data["active_controller"], "legacy")
+        self.assertEqual(data["active_controller"], "adaptive_local")
         self.assertIn("last_decision_reasons", data)
         self.assertIn("last_safety_overrides", data)
 
@@ -47,6 +47,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'name="adc_address"', response.data)
         self.assertNotIn(b"pcf8591_address", response.data)
+        self.assertIn(b'name="controller_active"', response.data)
+        self.assertIn(
+            b'name="adaptive_local_trend_window_seconds"',
+            response.data,
+        )
 
         response = self.client.post(
             "/config",
@@ -56,10 +61,18 @@ class WebTests(unittest.TestCase):
                 "adc_address": "73",
                 "automation_enabled": "on",
                 "watering_enabled": "on",
+                "controller_active": "adaptive_local",
+                "adaptive_local_trend_window_seconds": "1200",
             },
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(self.app_module.load_config()["adc_address"], 73)
+        saved = self.app_module.load_config()
+        self.assertEqual(saved["adc_address"], 73)
+        self.assertEqual(saved["controller"]["active"], "adaptive_local")
+        self.assertEqual(
+            saved["controllers"]["adaptive_local"]["trend_window_seconds"],
+            1200,
+        )
 
 
 if __name__ == "__main__":

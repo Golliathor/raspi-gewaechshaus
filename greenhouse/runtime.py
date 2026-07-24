@@ -37,6 +37,7 @@ class ControlEngine:
         self.watering_until: datetime | None = None
         self._watering_day: str | None = None
         self.daily_watering_seconds = 0.0
+        self.controller_state: dict[str, Any] = {}
 
     def restore(self, data: Mapping[str, Any]) -> None:
         runtime = data.get("control_runtime", {})
@@ -53,6 +54,10 @@ class ControlEngine:
         self.last_fallback_watering_date = runtime.get("last_fallback_watering_date")
         self._watering_day = runtime.get("watering_day")
         self.daily_watering_seconds = float(runtime.get("daily_watering_seconds", 0.0))
+        if runtime.get("controller_id") == self.controller.controller_id:
+            restored_controller_state = runtime.get("controller_state", {})
+            if isinstance(restored_controller_state, Mapping):
+                self.controller_state = dict(restored_controller_state)
         transitions = runtime.get("last_transition_at", {})
         self.last_transition_at = {}
         for name, value in transitions.items():
@@ -76,6 +81,8 @@ class ControlEngine:
             "last_fallback_watering_date": self.last_fallback_watering_date,
             "watering_day": self._watering_day,
             "daily_watering_seconds": self.daily_watering_seconds,
+            "controller_id": self.controller.controller_id,
+            "controller_state": dict(self.controller_state),
             "last_transition_at": {
                 name: value.isoformat(timespec="seconds")
                 for name, value in self.last_transition_at.items()
@@ -102,6 +109,8 @@ class ControlEngine:
             last_fallback_watering_date=self.last_fallback_watering_date,
             daily_watering_seconds=self.daily_watering_seconds,
             watering_check_due=watering_check_due,
+            now=now,
+            controller_state=dict(self.controller_state),
         )
         requested = self.controller.decide(validated_snapshot, context, self.config)
         safety = self.safety_layer.apply(
@@ -127,6 +136,9 @@ class ControlEngine:
             )
             if "watering_fallback_no_sensor_values" in requested.reasons:
                 self.last_fallback_watering_date = now.date().isoformat()
+
+        if requested.watering_seconds <= 0 or watering_started > 0:
+            self.controller_state = dict(requested.controller_state)
 
         transitions = list(expired_transition)
         for name in ("exhaust", "circulation", "water_valve"):

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +16,32 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_snapshots.csv"
 
 
 class ReplayTests(unittest.TestCase):
+    def test_adaptive_local_replay_uses_shared_output_contract(self) -> None:
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            results, summary = run_replay(
+                FIXTURE,
+                Path(directory),
+                controller_id="adaptive_local",
+                config=config,
+                run_id="adaptive-local-test",
+            )
+            decisions = (Path(directory) / "decisions.csv").read_text(
+                encoding="utf-8"
+            )
+            with (Path(directory) / "decisions.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                first_row = next(csv.DictReader(handle))
+
+        self.assertEqual(len(results), 3)
+        self.assertTrue(
+            all(result.controller_id == "adaptive_local" for result in results)
+        )
+        self.assertEqual(summary["controller_id"], "adaptive_local")
+        self.assertIn("adaptive-local-test,adaptive_local", decisions)
+        self.assertFalse(json.loads(first_row["diagnostics"])["weather_used"])
+
     def test_replay_is_deterministic_and_reports_metrics(self) -> None:
         config = copy.deepcopy(DEFAULT_CONFIG)
         with tempfile.TemporaryDirectory() as first_directory, tempfile.TemporaryDirectory() as second_directory:
