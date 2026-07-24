@@ -3,633 +3,1272 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ config.greenhouse_name }}</title>
+  <meta name="color-scheme" content="light">
+  <title>{{ config.greenhouse_name }} – Regelungsdashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7f5; color: #1f2937; }
-    header { background: #1f7a4d; color: white; padding: 16px 20px; }
-    nav a { color: white; margin-right: 14px; text-decoration: none; }
-    main { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
-    .value { font-size: 2rem; font-weight: bold; margin-top: 8px; }
-    .muted { color: #6b7280; }
-    .chart-card { margin-top: 16px; }
-    .chart-wrap {position: relative; height: 280px; width: 100%;} @media (max-width: 700px) {.chart-wrap {height: 220px;}}
-    .relay-grid, .sensor-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 12px; }
-    .relay-box, .sensor-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fafafa; }
-    .status-on { color: #166534; font-weight: bold; }
-    .status-off { color: #991b1b; font-weight: bold; }
-    .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
-    button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; background: #1f7a4d; color: white; }
-    button.secondary { background: #6b7280; }
-    input[type="number"] { padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; width: 100px; }
-    .meta { margin-top: 10px; font-size: 0.9rem; color: #6b7280; }
-    canvas { width: 100% !important; height: 380px !important; }
+    :root {
+      --bg: #f3f6f3;
+      --surface: #ffffff;
+      --surface-soft: #f7faf8;
+      --line: #dfe7e1;
+      --text: #17221b;
+      --muted: #647067;
+      --green: #176b43;
+      --green-dark: #0e4d31;
+      --model-accent: #176b43;
+      --good: #16834f;
+      --warning: #b76e00;
+      --danger: #bd2c2c;
+      --inactive: #6b756e;
+      --shadow: 0 8px 28px rgba(24, 50, 34, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    button, input { font: inherit; }
+    header {
+      background:
+        radial-gradient(circle at 85% 0%, rgba(255,255,255,.14), transparent 32%),
+        linear-gradient(125deg, var(--green-dark), var(--green));
+      color: #fff;
+      padding: 22px max(18px, calc((100vw - 1280px) / 2));
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .brand h1 { margin: 0; font-size: clamp(1.35rem, 2.5vw, 2rem); }
+    .brand p { margin: 4px 0 0; color: rgba(255,255,255,.76); }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    nav a {
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 11px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.1);
+    }
+    nav a:hover, nav a:focus-visible { background: rgba(255,255,255,.2); }
+    main { max-width: 1280px; margin: 22px auto 48px; padding: 0 16px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid rgba(19, 73, 45, .08);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+    .section { margin-top: 20px; padding: 20px; }
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .section-head h2 { margin: 0; font-size: 1.18rem; }
+    .section-head p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+    .eyebrow {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: .84rem; }
+    .hidden { display: none !important; }
+
+    .model-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr);
+      overflow: hidden;
+      border-top: 5px solid var(--model-accent);
+    }
+    .model-main { padding: 24px; }
+    .model-main h2 { margin: 5px 0 8px; font-size: clamp(1.45rem, 3vw, 2.25rem); }
+    .model-main p { margin: 0; color: var(--muted); max-width: 760px; }
+    .model-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .tag, .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: .78rem;
+      font-weight: 700;
+      background: #edf3ef;
+      color: #385044;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .status-pill.good { color: var(--good); background: #e7f6ed; }
+    .status-pill.warning { color: var(--warning); background: #fff3dc; }
+    .status-pill.danger { color: var(--danger); background: #fdeaea; }
+    .status-pill.neutral { color: var(--inactive); background: #edf0ee; }
+    .model-side {
+      padding: 24px;
+      background: var(--surface-soft);
+      border-left: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+      align-content: center;
+    }
+    .meta-row { display: flex; justify-content: space-between; gap: 18px; font-size: .88rem; }
+    .meta-row span:first-child { color: var(--muted); }
+    .meta-row strong { text-align: right; overflow-wrap: anywhere; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+    .kpi { padding: 18px; min-width: 0; }
+    .kpi-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .kpi-value { font-size: clamp(1.65rem, 3vw, 2.3rem); font-weight: 780; margin: 8px 0 2px; }
+    .kpi-detail { min-height: 1.3em; color: var(--muted); font-size: .82rem; }
+    .meter {
+      position: relative;
+      height: 8px;
+      margin-top: 14px;
+      background: #e7ece8;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .meter-target {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background: rgba(22, 131, 79, .25);
+      border-left: 1px solid rgba(22, 131, 79, .65);
+      border-right: 1px solid rgba(22, 131, 79, .65);
+    }
+    .meter-marker {
+      position: absolute;
+      top: -3px;
+      width: 4px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--text);
+      transform: translateX(-2px);
+      transition: left .25s ease;
+    }
+    .kpi[data-state="good"] .kpi-value { color: var(--good); }
+    .kpi[data-state="warning"] .kpi-value { color: var(--warning); }
+    .kpi[data-state="danger"] .kpi-value { color: var(--danger); }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .decision-list { display: grid; gap: 9px; }
+    .decision-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 11px 12px;
+      border-radius: 10px;
+      background: var(--surface-soft);
+      border-left: 3px solid var(--model-accent);
+    }
+    .decision-icon {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--model-accent) 12%, white);
+      color: var(--model-accent);
+      font-size: .8rem;
+      font-weight: 800;
+    }
+    .safety-box {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #eaf6ee;
+      color: #17623f;
+      font-size: .88rem;
+    }
+    .safety-box.alert { background: #fdeaea; color: #942323; }
+    .diagnostic-groups { display: grid; gap: 12px; }
+    .diagnostic-group {
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 12px;
+    }
+    .diagnostic-group h3 { margin: 0 0 9px; font-size: .9rem; }
+    .diagnostic-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px 14px;
+    }
+    .diagnostic-value { min-width: 0; }
+    .diagnostic-value span { display: block; color: var(--muted); font-size: .72rem; }
+    .diagnostic-value strong { font-size: .88rem; overflow-wrap: anywhere; }
+
+    .actuator-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .actuator {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-soft);
+    }
+    .actuator-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .actuator h3 { margin: 0; font-size: 1rem; }
+    .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 13px; align-items: center; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 13px;
+      cursor: pointer;
+      color: #fff;
+      background: var(--green);
+      font-weight: 700;
+    }
+    button:hover { filter: brightness(.95); }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid rgba(43, 131, 84, .28);
+      outline-offset: 2px;
+    }
+    button.secondary { color: #37433c; background: #e2e8e4; }
+    input[type="number"] {
+      width: 90px;
+      padding: 8px;
+      border: 1px solid #cbd5ce;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .command-feedback { margin-top: 12px; min-height: 1.3em; color: var(--muted); font-size: .84rem; }
+
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .sensor {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-soft);
+    }
+    .sensor-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .sensor h3 { margin: 0; font-size: .95rem; }
+    .sensor-reading { font-size: 1.65rem; font-weight: 760; margin: 8px 0; }
+    .sensor-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: .76rem; }
+    .weather-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .weather-value { padding: 12px; border-radius: 10px; background: var(--surface-soft); }
+    .weather-value span { display: block; color: var(--muted); font-size: .76rem; }
+    .weather-value strong { font-size: 1.1rem; }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .chart-card { padding: 20px; min-width: 0; }
+    .chart-card.wide { grid-column: 1 / -1; }
+    .chart-wrap { position: relative; height: 310px; }
+    .chart-wrap.compact { height: 260px; }
+    canvas { max-width: 100%; }
+    .empty-chart {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .camera-layout { display: grid; grid-template-columns: minmax(220px, .35fr) minmax(0, 1fr); gap: 18px; }
+    #latest-image-box {
+      min-height: 180px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--surface-soft);
+      overflow: hidden;
+      color: var(--muted);
+    }
+    #latest-image-box img { display: block; max-width: 100%; max-height: 560px; }
+
+    @media (max-width: 980px) {
+      .model-hero, .two-column, .camera-layout { grid-template-columns: 1fr; }
+      .model-side { border-left: 0; border-top: 1px solid var(--line); }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .weather-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      header { padding: 18px 16px; }
+      main { margin-top: 14px; padding: 0 10px; }
+      .section, .chart-card, .model-main, .model-side { padding: 16px; }
+      .kpi-grid, .chart-grid, .actuator-grid, .sensor-grid { grid-template-columns: 1fr; }
+      .chart-card.wide { grid-column: auto; }
+      .chart-wrap { height: 260px; }
+      .header-row { align-items: flex-start; }
+      nav { width: 100%; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1 style="margin:0 0 8px 0;">{{ config.greenhouse_name }}</h1>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/config">Konfiguration</a>
-      <a href="/calibration">Kalibrierung</a>
-      <a href="/api/status">JSON API</a>
-    </nav>
-    <p>
-      <a href="{{ url_for('download_images') }}">Bilder als ZIP herunterladen</a>
-      |
-      <a href="{{ url_for('download_logs') }}">Logs als ZIP herunterladen</a>
-    </p>
+    <div class="header-row">
+      <div class="brand">
+        <h1>{{ config.greenhouse_name }}</h1>
+        <p>Regelung, Ressourcen und Sensorik auf einen Blick</p>
+      </div>
+      <nav aria-label="Hauptnavigation">
+        <a href="/" aria-current="page">Dashboard</a>
+        <a href="/config">Konfiguration</a>
+        <a href="/calibration">Kalibrierung</a>
+        <a href="/api/status">JSON API</a>
+        <a href="{{ url_for('download_logs') }}">Logs</a>
+        <a href="{{ url_for('download_images') }}">Bilder</a>
+      </nav>
+    </div>
   </header>
 
   <main>
-    <div class="grid">
-      <div class="card">
-        <div class="muted">Aktuelle Temperatur</div>
-        <div class="value" id="tempValue">{{ '%.1f'|format(latest.temperature_c) if latest.temperature_c is not none else '--' }} °C</div>
+    <section class="card model-hero" aria-labelledby="modelName">
+      <div class="model-main">
+        <div class="eyebrow">Aktives Regelungsmodell</div>
+        <h2 id="modelName">Wird geladen …</h2>
+        <p id="modelDescription">Die Modellbeschreibung wird aus dem aktiven Controller geladen.</p>
+        <div class="model-tags" id="modelTags"></div>
       </div>
-      <div class="card">
-        <div class="muted">Aktuelle Luftfeuchte</div>
-        <div class="value" id="humValue">{{ '%.1f'|format(latest.humidity_percent) if latest.humidity_percent is not none else '--' }} %</div>
-      </div>
-      <div class="card">
-        <div class="muted">Letzte Messung</div>
-        <div class="value" style="font-size: 1.2rem;" id="timeValue">{{ latest.label or 'Keine Daten' }}</div>
-        <div class="meta">
-          Status-Refresh: {{ config.refresh_seconds }} s<br>
-          Chart-Refresh: {{ config.chart_refresh_seconds }} s
-        </div>
-      </div>
-      <div class="card">
-        <div class="muted">Automatik</div>
-        <div class="value" style="font-size: 1.4rem;" id="automationState">
-          {{ "AKTIV" if state.automation_active else "AUS" }}
-        </div>
+      <div class="model-side">
+        <div class="meta-row"><span>Automatik</span><strong id="automationState">–</strong></div>
+        <div class="meta-row"><span>Datenstatus</span><strong id="freshnessState">–</strong></div>
+        <div class="meta-row"><span>Letzte Messung</span><strong id="timeValue">{{ latest.label or "Keine Daten" }}</strong></div>
+        <div class="meta-row"><span>Versuchs-ID</span><strong id="runId">{{ state.run_id or "–" }}</strong></div>
         <div class="button-row">
-          <button onclick="toggleAutomation(true)">EIN</button>
-          <button class="secondary" onclick="toggleAutomation(false)">AUS</button>
+          <button type="button" onclick="toggleAutomation(true)">Automatik ein</button>
+          <button type="button" class="secondary" onclick="toggleAutomation(false)">Automatik aus</button>
         </div>
       </div>
-      <div class="card">
-        <div class="muted">Regelung</div>
-        <div class="value" style="font-size:1.2rem;" id="controllerId">{{ state.active_controller or config.controller.active }}</div>
-        <div class="meta">
-          Versuch: <span id="runId">{{ state.run_id or "-" }}</span><br>
-          Entscheidung: <span id="decisionReasons">{{ (state.last_decision_reasons or [])|join(", ") or "-" }}</span><br>
-          Safety: <span id="safetyOverrides">{{ (state.last_safety_overrides or [])|join(", ") or "-" }}</span><br>
-          Wetter: <span id="weatherStatus">{{ "verfügbar" if state.weather_available else "lokaler Fallback" }}</span><br>
-          Außenwerte: <span id="weatherValues">{% if state.weather_available %}{{ state.weather.outside_temperature_c or "-" }} °C / {{ state.weather.outside_humidity_percent or "-" }} %{% else %}-{% endif %}</span>
-        </div>
-      </div>
-    </div>
+    </section>
 
-    <div class="card chart-card">
-      <h2>Relaisstatus</h2>
-      <div class="relay-grid">
-        <div class="relay-box">
-          <div class="muted">Abluft</div>
-          <div id="relayExhaust" class="{{ 'status-on' if relay_states.exhaust else 'status-off' }}">{{ "AN" if relay_states.exhaust else "AUS" }}</div>
-          <div class="button-row">
-            <button onclick="setRelay('exhaust', true)">AN</button>
-            <button class="secondary" onclick="setRelay('exhaust', false)">AUS</button>
+    <section class="kpi-grid" aria-label="Aktuelle Zielgrößen">
+      <article class="card kpi" id="temperatureKpi" data-state="neutral">
+        <div class="kpi-top"><span class="eyebrow">Temperatur</span><span class="status-pill neutral" id="temperatureStatus">Keine Daten</span></div>
+        <div class="kpi-value" id="tempValue">–</div>
+        <div class="kpi-detail" id="temperatureTarget">Zielbereich –</div>
+        <div class="meter"><span class="meter-target" id="temperatureTargetZone"></span><span class="meter-marker" id="temperatureMarker"></span></div>
+      </article>
+      <article class="card kpi" id="humidityKpi" data-state="neutral">
+        <div class="kpi-top"><span class="eyebrow">Luftfeuchte</span><span class="status-pill neutral" id="humidityStatus">Keine Daten</span></div>
+        <div class="kpi-value" id="humValue">–</div>
+        <div class="kpi-detail" id="humidityTarget">Zielbereich –</div>
+        <div class="meter"><span class="meter-target" id="humidityTargetZone"></span><span class="meter-marker" id="humidityMarker"></span></div>
+      </article>
+      <article class="card kpi" id="soilKpi" data-state="neutral">
+        <div class="kpi-top"><span class="eyebrow">Bodenfeuchte</span><span class="status-pill neutral" id="soilStatus">Keine Daten</span></div>
+        <div class="kpi-value" id="soilValue">–</div>
+        <div class="kpi-detail" id="soilTarget">Zielbereich –</div>
+        <div class="meter"><span class="meter-target" id="soilTargetZone"></span><span class="meter-marker" id="soilMarker"></span></div>
+      </article>
+      <article class="card kpi" id="lightKpi" data-state="neutral">
+        <div class="kpi-top"><span class="eyebrow">Licht</span><span class="status-pill neutral" id="lightStatus">Keine Daten</span></div>
+        <div class="kpi-value" id="lightValue">–</div>
+        <div class="kpi-detail" id="lightDetail">Aktueller Lichtwert</div>
+        <div class="meter"><span class="meter-target" style="left:0;width:100%;background:rgba(108,117,125,.08)"></span><span class="meter-marker" id="lightMarker"></span></div>
+      </article>
+    </section>
+
+    <div class="two-column">
+      <section class="card section" aria-labelledby="decisionHeading">
+        <div class="section-head">
+          <div>
+            <h2 id="decisionHeading">Letzte Regelentscheidung</h2>
+            <p>Maschinenentscheidungen werden in verständliche Aussagen übersetzt.</p>
+          </div>
+          <span class="status-pill neutral" id="decisionCount">0 Gründe</span>
+        </div>
+        <div class="decision-list" id="decisionReasons">
+          <div class="decision-item"><span class="decision-icon">–</span><span>Noch keine Entscheidung vorhanden.</span></div>
+        </div>
+        <div class="safety-box" id="safetyBox">Keine Safety-Eingriffe im letzten Regelzyklus.</div>
+      </section>
+
+      <section class="card section" aria-labelledby="diagnosticsHeading">
+        <div class="section-head">
+          <div>
+            <h2 id="diagnosticsHeading">Modell-Diagnostik</h2>
+            <p>Verwendete Grenzen, Trends, Sperrzeiten und Wetterkorrekturen.</p>
           </div>
         </div>
-        <div class="relay-box">
-          <div class="muted">Umluft</div>
-          <div id="relayCirculation" class="{{ 'status-on' if relay_states.circulation else 'status-off' }}">{{ "AN" if relay_states.circulation else "AUS" }}</div>
+        <div class="diagnostic-groups" id="diagnosticGroups">
+          <div class="muted small">Diagnosewerte erscheinen nach dem ersten Regelzyklus.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card section" aria-labelledby="actuatorHeading">
+      <div class="section-head">
+        <div>
+          <h2 id="actuatorHeading">Aktoren und manuelle Steuerung</h2>
+          <p>Der angezeigte Zustand entspricht dem zuletzt bestätigten Daemon-Status.</p>
+        </div>
+      </div>
+      <div class="actuator-grid">
+        <article class="actuator">
+          <div class="actuator-head"><h3>Abluft</h3><span class="status-pill neutral" id="relayExhaust">–</span></div>
+          <p class="muted small">Tauscht Gewächshausluft mit der Außenluft aus.</p>
+          <div class="button-row"><button type="button" onclick="setRelay('exhaust', true)">Einschalten</button><button type="button" class="secondary" onclick="setRelay('exhaust', false)">Ausschalten</button></div>
+        </article>
+        <article class="actuator">
+          <div class="actuator-head"><h3>Umluft</h3><span class="status-pill neutral" id="relayCirculation">–</span></div>
+          <p class="muted small">Bewegt die Luft innerhalb des Gewächshauses.</p>
+          <div class="button-row"><button type="button" onclick="setRelay('circulation', true)">Einschalten</button><button type="button" class="secondary" onclick="setRelay('circulation', false)">Ausschalten</button></div>
+        </article>
+        <article class="actuator">
+          <div class="actuator-head"><h3>Bewässerung</h3><span class="status-pill neutral" id="relayWater">–</span></div>
+          <p class="muted small">Wasserimpulse bleiben durch den Safety-Layer begrenzt.</p>
           <div class="button-row">
-            <button onclick="setRelay('circulation', true)">AN</button>
-            <button class="secondary" onclick="setRelay('circulation', false)">AUS</button>
+            <input id="waterSeconds" aria-label="Bewässerungsdauer in Sekunden" type="number" min="1" value="{{ config.watering_seconds }}">
+            <button type="button" onclick="waterPulse()">Impuls starten</button>
+            <button type="button" class="secondary" onclick="setRelay('water_valve', false)">Stoppen</button>
           </div>
+        </article>
+      </div>
+      <div class="command-feedback" id="commandFeedback" aria-live="polite"></div>
+      <div class="meta-row"><span>Letzte Bewässerung</span><strong id="lastWateringAt">{{ state.last_watering_at or "–" }}</strong></div>
+      <div class="meta-row"><span>Letzter Bewässerungsgrund</span><strong id="lastWateringReason">{{ state.last_watering_reason or "–" }}</strong></div>
+    </section>
+
+    <section class="card section" aria-labelledby="sensorHeading">
+      <div class="section-head">
+        <div>
+          <h2 id="sensorHeading">Lokale Sensorik</h2>
+          <p>Letztes Sensor-Update: <span id="lastSensorUpdate">{{ state.last_sensor_update or "–" }}</span></p>
         </div>
-        <div class="relay-box">
-          <div class="muted">Wasserventil</div>
-          <div id="relayWater" class="{{ 'status-on' if relay_states.water_valve else 'status-off' }}">{{ "AN" if relay_states.water_valve else "AUS" }}</div>
-          <div class="button-row">
-            <button onclick="setRelay('water_valve', true)">AN</button>
-            <button class="secondary" onclick="setRelay('water_valve', false)">AUS</button>
+      </div>
+      <div class="sensor-grid" id="sensorGrid"></div>
+    </section>
+
+    <section class="card section hidden" id="weatherPanel" aria-labelledby="weatherHeading">
+      <div class="section-head">
+        <div>
+          <h2 id="weatherHeading">Wetterdaten</h2>
+          <p id="weatherStatus">Wetterstatus wird geladen.</p>
+        </div>
+        <span class="status-pill neutral" id="weatherBadge">–</span>
+      </div>
+      <div class="weather-grid">
+        <div class="weather-value"><span>Außentemperatur</span><strong id="weatherTemperature">–</strong></div>
+        <div class="weather-value"><span>Außenluftfeuchte</span><strong id="weatherHumidity">–</strong></div>
+        <div class="weather-value"><span>Niederschlag</span><strong id="weatherRain">–</strong></div>
+        <div class="weather-value"><span>Regenwahrscheinlichkeit</span><strong id="weatherProbability">–</strong></div>
+      </div>
+    </section>
+
+    <section class="chart-grid" aria-label="Verlaufsdiagramme">
+      <article class="card chart-card wide">
+        <div class="section-head">
+          <div><h2>Klima im Regelverlauf</h2><p>Temperatur und Luftfeuchte mit den konfigurierten Zielbereichen.</p></div>
+        </div>
+        <div class="chart-wrap"><canvas id="climateChart"></canvas><div class="empty-chart hidden" id="climateEmpty">Noch keine Klimadaten vorhanden.</div></div>
+      </article>
+      <article class="card chart-card">
+        <div class="section-head">
+          <div><h2>Bodenfeuchte und Licht</h2><p>Lokale Sensorwerte auf gemeinsamer Prozentskala.</p></div>
+        </div>
+        <div class="chart-wrap"><canvas id="sensorChart"></canvas><div class="empty-chart hidden" id="sensorEmpty">Noch keine Sensordaten vorhanden.</div></div>
+      </article>
+      <article class="card chart-card">
+        <div class="section-head">
+          <div><h2>Täglicher Wasserverbrauch</h2><p>Geschätzt aus Ventillaufzeit und Durchflussrate.</p></div>
+        </div>
+        <div class="chart-wrap"><canvas id="dailyWaterChart"></canvas><div class="empty-chart hidden" id="waterEmpty">Noch keine Tagesdaten vorhanden.</div></div>
+      </article>
+      <article class="card chart-card">
+        <div class="section-head">
+          <div><h2>Tägliches Klima</h2><p>Tag-/Nachttemperatur und mittlere Luftfeuchte.</p></div>
+        </div>
+        <div class="chart-wrap compact"><canvas id="dailyClimateChart"></canvas></div>
+      </article>
+      <article class="card chart-card">
+        <div class="section-head">
+          <div><h2>Lichtressourcen</h2><p>Direkte Sonne und Lichtindex pro Tag.</p></div>
+        </div>
+        <div class="chart-wrap compact"><canvas id="dailyLightChart"></canvas></div>
+      </article>
+    </section>
+
+    <section class="card section" aria-labelledby="cameraHeading">
+      <div class="camera-layout">
+        <div>
+          <div class="section-head">
+            <div><h2 id="cameraHeading">Kamerabild</h2><p>Letzte Aufnahme: {{ state.last_image_time or "–" }}</p></div>
           </div>
+          <button type="button" onclick="loadLatestImage()">Bild laden / aktualisieren</button>
         </div>
+        <div id="latest-image-box"><span>Bild wird erst auf Anforderung geladen.</span></div>
       </div>
-
-      <div class="button-row" style="margin-top:16px;">
-        <label for="waterSeconds">Wasser für</label>
-        <input id="waterSeconds" type="number" min="1" value="{{ config.watering_seconds }}">
-        <span>Sekunden</span>
-        <button onclick="waterPulse()">Start</button>
-      </div>
-
-      <div class="meta">
-        Letzte Bewässerung: <span id="lastWateringAt">{{ state.last_watering_at or "-" }}</span><br>
-        Grund: <span id="lastWateringReason">{{ state.last_watering_reason or "-" }}</span>
-      </div>
-    </div>
-
-    <div class="card chart-card">
-      <h2>Bodenfeuchte</h2>
-      <div class="meta">Letztes Sensor-Update: <span id="lastSensorUpdate">{{ state.last_sensor_update or "-" }}</span></div>
-      <div class="sensor-grid" id="sensorGrid">
-        {% for sensor in state.soil_sensors %}
-        <div class="sensor-box">
-          <div><strong>{{ sensor.name }}</strong></div>
-          <div class="muted">Kanal {{ sensor.channel }}</div>
-          <div>Rohwert: {{ sensor.raw_value if sensor.raw_value is not none else "-" }}</div>
-          <div>Feuchte: {{ sensor.moisture_percent if sensor.moisture_percent is not none else "-" }} %</div>
-          <div>Trocken unter: {{ sensor.dry_below_percent }} %</div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="card chart-card">
-      <h2>Licht</h2>
-      {% set light = state.light_sensor or {} %}
-      <div class="sensor-box">
-        <p><strong>{{ light.name or "Lichtsensor" }}</strong></p>
-        <p>Kanal: {{ light.channel if light.channel is not none else 3 }}</p>
-        <p>Rohwert: <span id="lightRaw">{{ light.raw_value if light.raw_value is not none else "-" }}</span></p>
-        <p>Helligkeit: <span id="lightPercent">{{ light.light_percent if light.light_percent is not none else "-" }}</span> %</p>
-        <p>Lichtklasse:
-        <span id="lightClass">
-            {{ light.light_class if light.light_class else "-" }}
-        </span>
-        </p>
-      </div>
-    </div>
-
-    <div class="card chart-card">
-      <h2>Sensorverlauf</h2>
-      <canvas id="sensorChart"></canvas>
-    </div>
-      <div class="card chart-card">
-        <h2>Verlauf</h2>
-        <p id="chart-loading">Diagramm wird geladen...</p>
-        <canvas id="climateChart"></canvas>
-      </div>
-<div class="card chart-card">
-  <h2>Klima</h2>
-<canvas id="dailyClimateChart"></canvas>
-</div>
-
-<div class="card chart-card">
-  <h2>Wasserverbrauch</h2>
-<canvas id="dailyWaterChart"></canvas>
-</div>
-
-<div class="card chart-card">
- <h2>Direkte Sonne</h2>
-<canvas id="dailySunChart"></canvas>
-</div>
-<div class="card chart-card">
- <h2>Lichtindex</h2>
-<canvas id="dailyLightIndexChart"></canvas>
-</div>
-    
-   <div class="card chart-card">
-    <h2>Letztes Bild</h2>
-    <p>Letzte Aufnahme: {{ state.last_image_time or "-" }}</p>
-
-    <button onclick="loadLatestImage()">Bild laden / aktualisieren</button>
-
-    <div id="latest-image-box">
-      <p>Bild noch nicht geladen.</p>
-    </div>
-  </div>
+    </section>
   </main>
 
   <script>
     const refreshSeconds = {{ config.refresh_seconds|int }};
     const chartRefreshSeconds = {{ config.chart_refresh_seconds|int }};
-    let climateChart = null;
+    const initialController = {{ (state.active_controller or config.controller.active)|tojson }};
 
-    function formatRelayState(on) {
-      return on ? "AN" : "AUS";
+    const MODEL_META = {
+      baseline_fixed: {
+        name: "Baseline 1 · Feste Schwellwerte",
+        description: "Zustandslose Referenzregelung. Jeder Zyklus bewertet feste Temperatur-, Feuchte- und Bodenfeuchtegrenzen.",
+        tags: ["feste Grenzen", "zustandslos", "lokale Sensorik"],
+        color: "#2563eb"
+      },
+      baseline_hysteresis: {
+        name: "Baseline 2 · Hysterese und Sperrzeiten",
+        description: "Robustere Schwellwertregelung mit getrennten Ein-/Aus-Grenzen, Mindestlaufzeiten und Bewässerungssperre.",
+        tags: ["Hysterese", "Sperrzeiten", "lokale Sensorik"],
+        color: "#7c3aed"
+      },
+      adaptive_local: {
+        name: "Ansatz A · Adaptive lokale Regelung",
+        description: "Regelbasierte Adaption aus lokalen Trends, Licht, Temperaturbelastung und Bodenfeuchteentwicklung.",
+        tags: ["Trendanalyse", "adaptive Grenzen", "lokale Sensorik"],
+        color: "#c56a00"
+      },
+      adaptive_weather: {
+        name: "Ansatz B · Adaptive Wetterregelung",
+        description: "Erweitert Ansatz A um Außenklima und Niederschlagsprognose; bei fehlenden Wetterdaten gilt der lokale Fallback.",
+        tags: ["Trendanalyse", "Wetterdaten", "adaptiver Bedarf"],
+        color: "#047857"
+      },
+      legacy: {
+        name: "Legacy-Regler",
+        description: "Kompatibilitätsmodus für das ursprüngliche Regelverhalten.",
+        tags: ["Kompatibilität", "lokale Sensorik"],
+        color: "#64748b"
+      }
+    };
+
+    const REASON_LABELS = {
+      automation_disabled: "Automatik deaktiviert – bisherige Zustände bleiben erhalten",
+      exhaust_on_temperature_threshold: "Abluft EIN: Temperaturgrenze erreicht",
+      exhaust_on_humidity_threshold: "Abluft EIN: Feuchtegrenze erreicht",
+      exhaust_on_adaptive_threshold: "Abluft EIN: adaptive Grenze erreicht",
+      exhaust_off_below_fixed_thresholds: "Abluft AUS: feste Grenzen nicht erreicht",
+      exhaust_off_below_off_thresholds: "Abluft AUS: Ausschaltgrenzen unterschritten",
+      exhaust_off_adaptive_thresholds: "Abluft AUS: adaptive Ausschaltgrenzen unterschritten",
+      exhaust_off_below_min_temperature: "Abluft AUS: Mindesttemperatur schützt vor Auskühlung",
+      exhaust_off_invalid_air: "Abluft AUS: Luftmessung ungültig",
+      exhaust_hold_on_hysteresis: "Abluft bleibt EIN: Hysterese aktiv",
+      exhaust_hold_off_hysteresis: "Abluft bleibt AUS: Hysterese aktiv",
+      exhaust_hold_on_adaptive_hysteresis: "Abluft bleibt EIN: adaptive Hysterese aktiv",
+      exhaust_hold_off_adaptive_hysteresis: "Abluft bleibt AUS: adaptive Hysterese aktiv",
+      exhaust_hold_on_minimum_time: "Abluft bleibt EIN: Mindestlaufzeit",
+      exhaust_hold_off_minimum_time: "Abluft bleibt AUS: Sperrzeit",
+      circulation_on_temperature_threshold: "Umluft EIN: Temperaturgrenze erreicht",
+      circulation_on_humidity_threshold: "Umluft EIN: Feuchtegrenze erreicht",
+      circulation_on_adaptive_threshold: "Umluft EIN: adaptive Grenze erreicht",
+      circulation_off_below_fixed_thresholds: "Umluft AUS: feste Grenzen nicht erreicht",
+      circulation_off_below_off_thresholds: "Umluft AUS: Ausschaltgrenzen unterschritten",
+      circulation_off_adaptive_thresholds: "Umluft AUS: adaptive Ausschaltgrenzen unterschritten",
+      circulation_off_invalid_air: "Umluft AUS: Luftmessung ungültig",
+      circulation_hold_on_hysteresis: "Umluft bleibt EIN: Hysterese aktiv",
+      circulation_hold_off_hysteresis: "Umluft bleibt AUS: Hysterese aktiv",
+      circulation_hold_on_adaptive_hysteresis: "Umluft bleibt EIN: adaptive Hysterese aktiv",
+      circulation_hold_off_adaptive_hysteresis: "Umluft bleibt AUS: adaptive Hysterese aktiv",
+      circulation_hold_on_minimum_time: "Umluft bleibt EIN: Mindestlaufzeit",
+      circulation_hold_off_minimum_time: "Umluft bleibt AUS: Sperrzeit",
+      watering_on_fixed_soil_threshold: "Bewässerung angefordert: feste Bodengrenze unterschritten",
+      watering_on_dry_threshold: "Bewässerung angefordert: Boden trocken und freigegeben",
+      watering_on_adaptive_local_demand: "Bewässerung angefordert: lokaler adaptiver Bedarf",
+      watering_on_adaptive_weather_demand: "Bewässerung angefordert: wetteradaptiver Bedarf",
+      watering_off_above_fixed_threshold: "Keine Bewässerung: Boden ausreichend feucht",
+      watering_hold_above_on_threshold: "Keine Bewässerung: Einschaltgrenze nicht unterschritten",
+      watering_hold_above_adaptive_threshold: "Keine Bewässerung: adaptive Grenze nicht unterschritten",
+      watering_blocked_hysteresis: "Bewässerung gesperrt: Wiederfreigabe noch nicht erreicht",
+      watering_blocked_cooldown: "Bewässerung gesperrt: Sperrzeit läuft",
+      watering_blocked_missing_soil: "Bewässerung gesperrt: Bodenmessung fehlt",
+      watering_blocked_valve_active: "Bewässerung gesperrt: Ventil bereits aktiv",
+      watering_off_no_valid_soil: "Keine Bewässerung: kein gültiger Bodenwert",
+      watering_no_enabled_sensors: "Keine Bewässerung: kein Bodensensor aktiviert"
+    };
+
+    const DIAGNOSTIC_LABELS = {
+      thresholds: "Verwendete Schwellwerte",
+      adaptive_adjustments: "Adaptive Grenzwerte und Korrekturen",
+      trends_per_minute: "Lokale Trends pro Minute",
+      lock_remaining_seconds: "Verbleibende Sperrzeiten",
+      weather_scores: "Wetterbewertung",
+      weather_inputs: "Verwendete Wetterwerte",
+      temperature_c: "Temperatur",
+      humidity_percent: "Luftfeuchte",
+      light_percent: "Licht",
+      watering_armed: "Bewässerung freigegeben",
+      dry_soil_sensor_indices: "Trockene Sensoren",
+      weather_used: "Wetter verwendet",
+      weather_status: "Wetterstatus",
+      weather_age_seconds: "Wetteralter",
+      weather_provider: "Wetteranbieter"
+    };
+
+    const VALUE_LABELS = {
+      exhaust_temperature_c: "Abluft Temperatur",
+      exhaust_temperature_on_c: "Abluft Temp. EIN",
+      exhaust_temperature_off_c: "Abluft Temp. AUS",
+      effective_exhaust_temperature_on_c: "Abluft Temp. EIN effektiv",
+      effective_exhaust_temperature_off_c: "Abluft Temp. AUS effektiv",
+      exhaust_humidity_percent: "Abluft Feuchte",
+      exhaust_humidity_on_percent: "Abluft Feuchte EIN",
+      exhaust_humidity_off_percent: "Abluft Feuchte AUS",
+      effective_exhaust_humidity_on_percent: "Abluft Feuchte EIN effektiv",
+      effective_exhaust_humidity_off_percent: "Abluft Feuchte AUS effektiv",
+      circulation_temperature_c: "Umluft Temperatur",
+      circulation_temperature_on_c: "Umluft Temp. EIN",
+      circulation_temperature_off_c: "Umluft Temp. AUS",
+      effective_circulation_temperature_on_c: "Umluft Temp. EIN effektiv",
+      effective_circulation_temperature_off_c: "Umluft Temp. AUS effektiv",
+      circulation_humidity_percent: "Umluft Feuchte",
+      soil_moisture_percent: "Bodenfeuchte",
+      effective_soil_moisture_on_percent: "Bodenfeuchte EIN effektiv",
+      watering_seconds: "Gießdauer",
+      watering: "Bewässerung",
+      exhaust: "Abluft",
+      circulation: "Umluft",
+      temperature_c: "Temperatur",
+      humidity_percent: "Luftfeuchte",
+      soil_moisture_percent: "Bodenfeuchte",
+      projected_heating_c: "Projizierte Erwärmung",
+      projected_humidity_rise_percent: "Projizierter Feuchteanstieg",
+      projected_soil_drop_percent: "Projizierter Bodenabfall",
+      temperature_threshold_reduction_c: "Temperaturabsenkung",
+      humidity_threshold_reduction_percent: "Feuchteabsenkung",
+      soil_threshold_increase_percent: "Bodengrenzerhöhung",
+      cooling_opportunity: "Kühlpotenzial",
+      dehumidifying_opportunity: "Entfeuchtungspotenzial",
+      outdoor_heat: "Außenhitzebelastung",
+      rain: "Regensignal",
+      rain_effective: "Wirksames Regensignal",
+      outside_temperature_c: "Außentemperatur",
+      outside_humidity_percent: "Außenluftfeuchte",
+      precipitation_mm: "Niederschlag",
+      precipitation_probability_percent: "Regenwahrscheinlichkeit"
+    };
+
+    const charts = {};
+
+    function safeNumber(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
     }
 
-    function applyRelayStyle(element, on) {
-      element.textContent = formatRelayState(on);
-      element.classList.remove("status-on", "status-off");
-      element.classList.add(on ? "status-on" : "status-off");
+    function formatValue(value, key = "") {
+      if (value === null || value === undefined || value === "") return "–";
+      if (typeof value === "boolean") return value ? "Ja" : "Nein";
+      if (Array.isArray(value)) return value.length ? value.map(index => Number(index) + 1).join(", ") : "Keine";
+      const number = safeNumber(value);
+      if (number === null) return String(value);
+      const formatted = Math.abs(number) >= 100 ? number.toFixed(0) : number.toFixed(2).replace(/\.?0+$/, "");
+      if (key.includes("seconds")) return `${formatted} s`;
+      if (key.includes("temperature") || key.endsWith("_c")) return `${formatted} °C`;
+      if (key.includes("humidity") || key.includes("percent") || key.includes("probability")) return `${formatted} %`;
+      if (key.includes("precipitation_mm")) return `${formatted} mm`;
+      return formatted;
     }
 
-function makeChart(labels, temps, hums) {
-  const ctx = document.getElementById("climateChart");
-  climateChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "Temperatur (°C)",
-          data: temps,
-          tension: 0.2,
-          yAxisID: "y",
-          borderColor: "#dc3545",
-          backgroundColor: "rgba(220, 53, 69, 0.12)"
-        },
-        {
-          label: "Luftfeuchte (%)",
-          data: hums,
-          tension: 0.2,
-          yAxisID: "y1",
-          borderColor: "#0d6efd",
-          backgroundColor: "rgba(13, 110, 253, 0.12)"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      interaction: { mode: "index", intersect: false },
-      scales: {
-        y: {
-          type: "linear",
-          position: "left",
-          title: { display: true, text: "°C" }
-        },
-        y1: {
-          type: "linear",
-          position: "right",
-          title: { display: true, text: "%" },
-          grid: { drawOnChartArea: false }
-        }
+    function setPill(element, text, state = "neutral") {
+      element.textContent = text;
+      element.className = `status-pill ${state}`;
+      if (!element.querySelector(".status-dot")) {
+        const dot = document.createElement("span");
+        dot.className = "status-dot";
+        element.prepend(dot);
       }
     }
-  });
-}
 
-    function renderSensors(sensors) {
+    function renderModel(controllerId) {
+      const meta = MODEL_META[controllerId] || {
+        name: controllerId || "Unbekannter Controller",
+        description: "Für diesen Controller ist noch keine Beschreibung hinterlegt.",
+        tags: ["Controller"],
+        color: "#64748b"
+      };
+      document.documentElement.style.setProperty("--model-accent", meta.color);
+      document.getElementById("modelName").textContent = meta.name;
+      document.getElementById("modelDescription").textContent = meta.description;
+      const tags = document.getElementById("modelTags");
+      tags.replaceChildren(...meta.tags.map(text => {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = text;
+        return tag;
+      }));
+      document.getElementById("weatherPanel").classList.toggle("hidden", controllerId !== "adaptive_weather");
+    }
+
+    function metricState(value, minimum, maximum) {
+      if (value === null) return ["Keine Daten", "neutral"];
+      if (value >= minimum && value <= maximum) return ["Im Ziel", "good"];
+      const margin = Math.max((maximum - minimum) * .35, 2);
+      if (value >= minimum - margin && value <= maximum + margin) return ["Nahe Ziel", "warning"];
+      return ["Außerhalb", "danger"];
+    }
+
+    function updateMetric({ id, value, unit, minimum, maximum, scaleMinimum, scaleMaximum, detail }) {
+      const card = document.getElementById(`${id}Kpi`);
+      const status = document.getElementById(`${id}Status`);
+      const marker = document.getElementById(`${id}Marker`);
+      const target = document.getElementById(`${id}TargetZone`);
+      const valueElement = document.getElementById(id === "temperature" ? "tempValue" : id === "humidity" ? "humValue" : `${id}Value`);
+      const detailElement = document.getElementById(`${id}Target`);
+      const numeric = safeNumber(value);
+      const [label, state] = metricState(numeric, minimum, maximum);
+      card.dataset.state = state;
+      setPill(status, label, state);
+      valueElement.textContent = numeric === null ? "–" : `${numeric.toFixed(1)} ${unit}`;
+      detailElement.textContent = detail || `Ziel ${minimum}–${maximum} ${unit}`;
+      const range = scaleMaximum - scaleMinimum;
+      const position = numeric === null ? 0 : Math.max(0, Math.min(100, ((numeric - scaleMinimum) / range) * 100));
+      marker.style.left = `${position}%`;
+      marker.style.opacity = numeric === null ? "0" : "1";
+      target.style.left = `${Math.max(0, ((minimum - scaleMinimum) / range) * 100)}%`;
+      target.style.width = `${Math.min(100, ((maximum - minimum) / range) * 100)}%`;
+    }
+
+    function updateLight(light) {
+      const value = safeNumber(light.light_percent);
+      document.getElementById("lightValue").textContent = value === null ? "–" : `${value.toFixed(1)} %`;
+      document.getElementById("lightDetail").textContent = light.light_class ? `Klasse: ${light.light_class}` : "Aktueller Lichtwert";
+      document.getElementById("lightMarker").style.left = `${Math.max(0, Math.min(100, value || 0))}%`;
+      document.getElementById("lightMarker").style.opacity = value === null ? "0" : "1";
+      document.getElementById("lightKpi").dataset.state = value === null ? "neutral" : "good";
+      setPill(document.getElementById("lightStatus"), value === null ? "Keine Daten" : (light.light_class || "Gemessen"), value === null ? "neutral" : "good");
+    }
+
+    function renderSensors(sensors, targets) {
       const grid = document.getElementById("sensorGrid");
-      grid.innerHTML = "";
-
-      (sensors || []).forEach(sensor => {
-        const box = document.createElement("div");
-        box.className = "sensor-box";
-        box.innerHTML = `
-          <div><strong>${sensor.name}</strong></div>
-          <div class="muted">Kanal ${sensor.channel}</div>
-          <div>Rohwert: ${sensor.raw_value ?? "-"}</div>
-          <div>Feuchte: ${sensor.moisture_percent ?? "-"} %</div>
-          <div>Trocken unter: ${sensor.dry_below_percent} %</div>
-        `;
-        grid.appendChild(box);
+      grid.replaceChildren();
+      const enabled = (sensors || []).filter(sensor => sensor.enabled !== false);
+      if (!enabled.length) {
+        const empty = document.createElement("div");
+        empty.className = "muted small";
+        empty.textContent = "Keine Bodensensoren aktiviert.";
+        grid.appendChild(empty);
+      }
+      enabled.forEach(sensor => {
+        const value = safeNumber(sensor.moisture_percent);
+        const threshold = safeNumber(sensor.dry_below_percent);
+        const article = document.createElement("article");
+        article.className = "sensor";
+        const head = document.createElement("div");
+        head.className = "sensor-head";
+        const title = document.createElement("h3");
+        title.textContent = sensor.name || `Sensor ${Number(sensor.index || 0) + 1}`;
+        const pill = document.createElement("span");
+        setPill(pill, value === null ? "Keine Daten" : value <= threshold ? "Trocken" : "Feucht", value === null ? "neutral" : value <= threshold ? "danger" : "good");
+        head.append(title, pill);
+        const reading = document.createElement("div");
+        reading.className = "sensor-reading";
+        reading.textContent = value === null ? "–" : `${value.toFixed(1)} %`;
+        const meter = document.createElement("div");
+        meter.className = "meter";
+        const targetZone = document.createElement("span");
+        targetZone.className = "meter-target";
+        targetZone.style.left = `${targets.soil_moisture_min_percent || 0}%`;
+        targetZone.style.width = `${(targets.soil_moisture_max_percent || 100) - (targets.soil_moisture_min_percent || 0)}%`;
+        const marker = document.createElement("span");
+        marker.className = "meter-marker";
+        marker.style.left = `${Math.max(0, Math.min(100, value || 0))}%`;
+        marker.style.opacity = value === null ? "0" : "1";
+        meter.append(targetZone, marker);
+        const meta = document.createElement("div");
+        meta.className = "sensor-meta";
+        const channel = document.createElement("span");
+        channel.textContent = `Kanal ${sensor.channel ?? "–"} · Roh ${sensor.raw_value ?? "–"}`;
+        const dry = document.createElement("span");
+        dry.textContent = `Trocken ≤ ${threshold ?? "–"} %`;
+        meta.append(channel, dry);
+        article.append(head, reading, meter, meta);
+        grid.appendChild(article);
       });
+
+      const values = enabled.map(sensor => safeNumber(sensor.moisture_percent)).filter(value => value !== null);
+      const minimum = values.length ? Math.min(...values) : null;
+      const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+      updateMetric({
+        id: "soil",
+        value: minimum,
+        unit: "%",
+        minimum: targets.soil_moisture_min_percent,
+        maximum: targets.soil_moisture_max_percent,
+        scaleMinimum: 0,
+        scaleMaximum: 100,
+        detail: average === null ? `Ziel ${targets.soil_moisture_min_percent}–${targets.soil_moisture_max_percent} %` : `Minimum · Mittel ${average.toFixed(1)} %`
+      });
+    }
+
+    function renderReasons(reasons) {
+      const container = document.getElementById("decisionReasons");
+      const list = reasons || [];
+      container.replaceChildren();
+      if (!list.length) {
+        const item = document.createElement("div");
+        item.className = "decision-item";
+        item.innerHTML = '<span class="decision-icon">–</span><span>Noch keine Entscheidung vorhanden.</span>';
+        container.appendChild(item);
+      } else {
+        list.forEach((reason, index) => {
+          const item = document.createElement("div");
+          item.className = "decision-item";
+          const icon = document.createElement("span");
+          icon.className = "decision-icon";
+          icon.textContent = String(index + 1);
+          const text = document.createElement("span");
+          text.textContent = REASON_LABELS[reason] || reason.replaceAll("_", " ");
+          item.append(icon, text);
+          container.appendChild(item);
+        });
+      }
+      document.getElementById("decisionCount").textContent = `${list.length} ${list.length === 1 ? "Grund" : "Gründe"}`;
+    }
+
+    function renderSafety(overrides) {
+      const box = document.getElementById("safetyBox");
+      const list = overrides || [];
+      box.classList.toggle("alert", list.length > 0);
+      box.textContent = list.length
+        ? `Safety-Eingriff: ${list.map(item => item.replaceAll("_", " ")).join(", ")}`
+        : "Keine Safety-Eingriffe im letzten Regelzyklus.";
+    }
+
+    function diagnosticEntries(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      return Object.entries(value).filter(([, item]) => item !== null && item !== undefined);
+    }
+
+    function renderDiagnostics(diagnostics) {
+      const container = document.getElementById("diagnosticGroups");
+      container.replaceChildren();
+      const source = diagnostics || {};
+      const preferredGroups = ["thresholds", "adaptive_adjustments", "trends_per_minute", "lock_remaining_seconds", "weather_scores", "weather_inputs"];
+      let groupsRendered = 0;
+      preferredGroups.forEach(groupKey => {
+        const entries = diagnosticEntries(source[groupKey]);
+        if (!entries.length) return;
+        const group = document.createElement("section");
+        group.className = "diagnostic-group";
+        const heading = document.createElement("h3");
+        heading.textContent = DIAGNOSTIC_LABELS[groupKey] || groupKey;
+        const grid = document.createElement("div");
+        grid.className = "diagnostic-grid";
+        entries.slice(0, 12).forEach(([key, value]) => {
+          const item = document.createElement("div");
+          item.className = "diagnostic-value";
+          const label = document.createElement("span");
+          label.textContent = VALUE_LABELS[key] || key.replaceAll("_", " ");
+          const strong = document.createElement("strong");
+          strong.textContent = formatValue(value, key);
+          item.append(label, strong);
+          grid.appendChild(item);
+        });
+        group.append(heading, grid);
+        container.appendChild(group);
+        groupsRendered += 1;
+      });
+
+      const basics = Object.entries(source).filter(([key, value]) =>
+        !preferredGroups.includes(key) && value !== null && value !== undefined && typeof value !== "object"
+      );
+      if (basics.length) {
+        const group = document.createElement("section");
+        group.className = "diagnostic-group";
+        const heading = document.createElement("h3");
+        heading.textContent = "Zyklusstatus";
+        const grid = document.createElement("div");
+        grid.className = "diagnostic-grid";
+        basics.slice(0, 10).forEach(([key, value]) => {
+          const item = document.createElement("div");
+          item.className = "diagnostic-value";
+          const label = document.createElement("span");
+          label.textContent = DIAGNOSTIC_LABELS[key] || VALUE_LABELS[key] || key.replaceAll("_", " ");
+          const strong = document.createElement("strong");
+          strong.textContent = formatValue(value, key);
+          item.append(label, strong);
+          grid.appendChild(item);
+        });
+        group.append(heading, grid);
+        container.appendChild(group);
+        groupsRendered += 1;
+      }
+      if (!groupsRendered) {
+        const empty = document.createElement("div");
+        empty.className = "muted small";
+        empty.textContent = "Diagnosewerte erscheinen nach dem ersten Regelzyklus.";
+        container.appendChild(empty);
+      }
+    }
+
+    function setRelayState(elementId, on) {
+      setPill(document.getElementById(elementId), on ? "AN" : "AUS", on ? "good" : "neutral");
+    }
+
+    function renderWeather(data, controllerId) {
+      const panel = document.getElementById("weatherPanel");
+      panel.classList.toggle("hidden", controllerId !== "adaptive_weather");
+      if (controllerId !== "adaptive_weather") return;
+      const weather = data.weather || {};
+      const available = !!data.weather_available;
+      setPill(document.getElementById("weatherBadge"), available ? "Aktuell" : "Fallback", available ? "good" : "warning");
+      document.getElementById("weatherStatus").textContent = available
+        ? `Daten von ${weather.provider || "Wetteranbieter"} · ${weather.timestamp || "Zeit unbekannt"}`
+        : (data.last_weather_error ? `Lokaler Fallback: ${data.last_weather_error}` : "Keine Wetterdaten – lokale Regelbasis aktiv.");
+      document.getElementById("weatherTemperature").textContent = formatValue(weather.outside_temperature_c, "outside_temperature_c");
+      document.getElementById("weatherHumidity").textContent = formatValue(weather.outside_humidity_percent, "outside_humidity_percent");
+      document.getElementById("weatherRain").textContent = formatValue(weather.precipitation_mm, "precipitation_mm");
+      document.getElementById("weatherProbability").textContent = formatValue(weather.precipitation_probability_percent, "precipitation_probability_percent");
+    }
+
+    function freshnessState(timestamp, staleAfterSeconds) {
+      if (!timestamp) return ["Keine Messung", "danger"];
+      const parsed = new Date(timestamp);
+      if (Number.isNaN(parsed.getTime())) return ["Zeit unbekannt", "warning"];
+      const age = Math.max(0, (Date.now() - parsed.getTime()) / 1000);
+      if (age <= staleAfterSeconds) return ["Aktuell", "good"];
+      if (age <= staleAfterSeconds * 2) return ["Veraltet", "warning"];
+      return ["Kritisch veraltet", "danger"];
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return response.json();
     }
 
     async function refreshStatus() {
-      const response = await fetch("/api/status");
-      const data = await response.json();
+      try {
+        const data = await fetchJson("/api/status");
+        const config = data.config || {};
+        const targets = config.targets || {
+          temperature_min_c: 18,
+          temperature_max_c: 28,
+          humidity_min_percent: 40,
+          humidity_max_percent: 70,
+          soil_moisture_min_percent: 35,
+          soil_moisture_max_percent: 70
+        };
+        const controllerId = data.active_controller || initialController;
+        renderModel(controllerId);
+        const automation = !!data.automation_active;
+        setPill(document.getElementById("automationState"), automation ? "AKTIV" : "AUS", automation ? "good" : "warning");
+        document.getElementById("runId").textContent = data.run_id || "–";
+        document.getElementById("timeValue").textContent = data.latest?.label || "Keine Daten";
+        const [freshnessLabel, freshnessStatus] = freshnessState(data.latest?.timestamp, Number(config.safety?.sensor_stale_after_seconds || 180));
+        setPill(document.getElementById("freshnessState"), freshnessLabel, freshnessStatus);
 
-      const latest = data.latest || null;
-      const relays = data.relays || {};
-      const automationActive = !!data.automation_active;
+        updateMetric({
+          id: "temperature",
+          value: data.latest?.temperature_c,
+          unit: "°C",
+          minimum: Number(targets.temperature_min_c),
+          maximum: Number(targets.temperature_max_c),
+          scaleMinimum: 0,
+          scaleMaximum: 50
+        });
+        updateMetric({
+          id: "humidity",
+          value: data.latest?.humidity_percent,
+          unit: "%",
+          minimum: Number(targets.humidity_min_percent),
+          maximum: Number(targets.humidity_max_percent),
+          scaleMinimum: 0,
+          scaleMaximum: 100
+        });
+        renderSensors(data.soil_sensors || [], targets);
+        updateLight(data.light_sensor || {});
 
-      document.getElementById("tempValue").textContent =
-        latest && latest.temperature_c !== null ? `${latest.temperature_c.toFixed(1)} °C` : "--";
-
-      document.getElementById("humValue").textContent =
-        latest && latest.humidity_percent !== null ? `${latest.humidity_percent.toFixed(1)} %` : "--";
-
-      document.getElementById("timeValue").textContent =
-        latest && latest.label ? latest.label : "Keine Daten";
-
-      document.getElementById("automationState").textContent = automationActive ? "AKTIV" : "AUS";
-
-      applyRelayStyle(document.getElementById("relayExhaust"), !!relays.exhaust);
-      applyRelayStyle(document.getElementById("relayCirculation"), !!relays.circulation);
-      applyRelayStyle(document.getElementById("relayWater"), !!relays.water_valve);
-
-      document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "-";
-      document.getElementById("lastWateringAt").textContent = data.last_watering_at || "-";
-      document.getElementById("lastWateringReason").textContent = data.last_watering_reason || "-";
-      document.getElementById("controllerId").textContent = data.active_controller || "-";
-      document.getElementById("runId").textContent = data.run_id || "-";
-      document.getElementById("decisionReasons").textContent =
-        (data.last_decision_reasons || []).join(", ") || "-";
-      document.getElementById("safetyOverrides").textContent =
-        (data.last_safety_overrides || []).join(", ") || "-";
-      const weather = data.weather || {};
-      document.getElementById("weatherStatus").textContent =
-        data.weather_available
-          ? `verfügbar (${weather.provider || "unbekannt"})`
-          : (data.last_weather_error ? `lokaler Fallback: ${data.last_weather_error}` : "lokaler Fallback");
-      document.getElementById("weatherValues").textContent =
-        data.weather_available
-          ? `${weather.outside_temperature_c ?? "-"} °C / ${weather.outside_humidity_percent ?? "-"} %`
-          : "-";
-
-      renderSensors(data.soil_sensors || []);
-      
-      const light = data.light_sensor || {};
-      document.getElementById("lightClass").textContent = light.light_class ?? "-";
-      document.getElementById("lightRaw").textContent = light.raw_value ?? "-";
-      document.getElementById("lightPercent").textContent = light.light_percent ?? "-";
-    }
-
-    async function refreshChart() {
-      const response = await fetch("/api/chart");
-      const chart = await response.json();
-
-      const labels = chart.labels || [];
-      const temps = chart.temperature || [];
-      const hums = chart.humidity || [];
-
-      if (!climateChart) {
-        makeChart(labels, temps, hums);
-      } else {
-        climateChart.data.labels = labels;
-        climateChart.data.datasets[0].data = temps;
-        climateChart.data.datasets[1].data = hums;
-        climateChart.update("none");
+        const relays = data.relays || {};
+        setRelayState("relayExhaust", !!relays.exhaust);
+        setRelayState("relayCirculation", !!relays.circulation);
+        setRelayState("relayWater", !!relays.water_valve);
+        document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "–";
+        document.getElementById("lastWateringAt").textContent = data.last_watering_at || "–";
+        document.getElementById("lastWateringReason").textContent = REASON_LABELS[data.last_watering_reason] || data.last_watering_reason || "–";
+        renderReasons(data.last_decision_reasons);
+        renderSafety(data.last_safety_overrides);
+        renderDiagnostics(data.last_decision_diagnostics);
+        renderWeather(data, controllerId);
+      } catch (error) {
+        setPill(document.getElementById("freshnessState"), "API nicht erreichbar", "danger");
+        document.getElementById("commandFeedback").textContent = `Statusfehler: ${error.message}`;
       }
     }
-    
-    let sensorChart = null;
-    
-    async function refreshSensorChart() {
-      const response = await fetch("/api/sensor_chart");
-      const data = await response.json();
 
-      const ctx = document.getElementById("sensorChart");
-      if (!ctx) return;
-
-      if (!sensorChart) {
-        sensorChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: data.labels,
-          datasets: [
-            { label: "Boden 1 (%)", data: data.soil1 },
-            { label: "Boden 2 (%)", data: data.soil2 },
-            { label: "Boden 3 (%)", data: data.soil3 },
-            { label: "Licht (%)", data: data.light }
-          ]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            y: {
-              min: 0,
-              max: 100
-            }
-          }
-        }
-      });  
-    } else {
-      sensorChart.data.labels = data.labels;
-      sensorChart.data.datasets[0].data = data.soil1;
-      sensorChart.data.datasets[1].data = data.soil2;
-      sensorChart.data.datasets[2].data = data.soil3;
-      sensorChart.data.datasets[3].data = data.light;
-      sensorChart.update();
+    function chartDefaults() {
+      Chart.defaults.color = "#59665e";
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+      Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      Chart.defaults.plugins.legend.labels.boxWidth = 8;
     }
-  }
 
-  refreshSensorChart();
-  setInterval(refreshSensorChart, {{ config.chart_refresh_seconds * 1000 }});
-    
-    async function setRelay(name, on) {
-      await fetch(`/api/relays/${name}`, {
+    function lineDataset(label, data, color, axis = "y") {
+      return {
+        label,
+        data,
+        yAxisID: axis,
+        borderColor: color,
+        backgroundColor: `${color}20`,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: .25,
+        spanGaps: true
+      };
+    }
+
+    function targetLine(label, value, color, axis) {
+      return {
+        label,
+        data: [],
+        yAxisID: axis,
+        borderColor: color,
+        borderWidth: 1,
+        borderDash: [5, 5],
+        pointRadius: 0,
+        fill: false,
+        _targetValue: value
+      };
+    }
+
+    async function refreshClimateChart() {
+      try {
+        const [data, status] = await Promise.all([fetchJson("/api/chart"), fetchJson("/api/status")]);
+        const labels = data.labels || [];
+        document.getElementById("climateEmpty").classList.toggle("hidden", labels.length > 0);
+        const targets = status.config?.targets || {};
+        const targetDatasets = [
+          targetLine("Temperatur Ziel min", Number(targets.temperature_min_c || 18), "#d97706", "yTemp"),
+          targetLine("Temperatur Ziel max", Number(targets.temperature_max_c || 28), "#d97706", "yTemp"),
+          targetLine("Feuchte Ziel min", Number(targets.humidity_min_percent || 40), "#0284c7", "yHumidity"),
+          targetLine("Feuchte Ziel max", Number(targets.humidity_max_percent || 70), "#0284c7", "yHumidity")
+        ];
+        targetDatasets.forEach(dataset => dataset.data = labels.map(() => dataset._targetValue));
+        const datasets = [
+          lineDataset("Temperatur (°C)", data.temperature || [], "#dc5a35", "yTemp"),
+          lineDataset("Luftfeuchte (%)", data.humidity || [], "#1677b8", "yHumidity"),
+          ...targetDatasets
+        ];
+        if (!charts.climate) {
+          charts.climate = new Chart(document.getElementById("climateChart"), {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              interaction: { mode: "index", intersect: false },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                yTemp: { position: "left", title: { display: true, text: "Temperatur (°C)" } },
+                yHumidity: { position: "right", min: 0, max: 100, title: { display: true, text: "Luftfeuchte (%)" }, grid: { drawOnChartArea: false } }
+              }
+            }
+          });
+        } else {
+          charts.climate.data.labels = labels;
+          charts.climate.data.datasets = datasets;
+          charts.climate.update("none");
+        }
+      } catch (error) {
+        document.getElementById("climateEmpty").textContent = `Diagrammfehler: ${error.message}`;
+        document.getElementById("climateEmpty").classList.remove("hidden");
+      }
+    }
+
+    async function refreshSensorChart() {
+      try {
+        const data = await fetchJson("/api/sensor_chart");
+        const labels = data.labels || [];
+        document.getElementById("sensorEmpty").classList.toggle("hidden", labels.length > 0);
+        const datasets = [
+          lineDataset("Boden 1 (%)", data.soil1 || [], "#176b43"),
+          lineDataset("Boden 2 (%)", data.soil2 || [], "#45a36d"),
+          lineDataset("Boden 3 (%)", data.soil3 || [], "#7bbf91"),
+          lineDataset("Licht (%)", data.light || [], "#d69b12")
+        ];
+        if (!charts.sensor) {
+          charts.sensor = new Chart(document.getElementById("sensorChart"), {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              interaction: { mode: "index", intersect: false },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } },
+                y: { min: 0, max: 100, title: { display: true, text: "Prozent" } }
+              }
+            }
+          });
+        } else {
+          charts.sensor.data.labels = labels;
+          charts.sensor.data.datasets = datasets;
+          charts.sensor.update("none");
+        }
+      } catch (error) {
+        document.getElementById("sensorEmpty").textContent = `Diagrammfehler: ${error.message}`;
+        document.getElementById("sensorEmpty").classList.remove("hidden");
+      }
+    }
+
+    async function refreshDailyCharts() {
+      try {
+        const rows = await fetchJson("/api/daily_summary");
+        const labels = rows.map(row => row.date);
+        document.getElementById("waterEmpty").classList.toggle("hidden", labels.length > 0);
+        const climateData = [
+          lineDataset("Ø Temperatur Tag (°C)", rows.map(row => row.avg_temp_day_c), "#dc5a35", "yTemp"),
+          lineDataset("Ø Temperatur Nacht (°C)", rows.map(row => row.avg_temp_night_c), "#7c3aed", "yTemp"),
+          lineDataset("Ø Luftfeuchte (%)", rows.map(row => row.avg_humidity_percent), "#1677b8", "yPercent")
+        ];
+        if (!charts.dailyClimate) {
+          charts.dailyClimate = new Chart(document.getElementById("dailyClimateChart"), {
+            type: "line",
+            data: { labels, datasets: climateData },
+            options: {
+              responsive: true, maintainAspectRatio: false, animation: false,
+              interaction: { mode: "index", intersect: false },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+                yTemp: { position: "left", title: { display: true, text: "°C" } },
+                yPercent: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: "%" } }
+              }
+            }
+          });
+        } else {
+          charts.dailyClimate.data.labels = labels;
+          charts.dailyClimate.data.datasets = climateData;
+          charts.dailyClimate.update("none");
+        }
+
+        const waterData = {
+          labels,
+          datasets: [{ label: "Wasser (ml)", data: rows.map(row => row.water_ml), backgroundColor: "#2d8fd5", borderRadius: 5 }]
+        };
+        if (!charts.water) {
+          charts.water = new Chart(document.getElementById("dailyWaterChart"), {
+            type: "bar", data: waterData,
+            options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, title: { display: true, text: "Milliliter" } } } }
+          });
+        } else {
+          charts.water.data = waterData;
+          charts.water.update("none");
+        }
+
+        const lightData = {
+          labels,
+          datasets: [
+            { type: "bar", label: "Direkte Sonne (min)", data: rows.map(row => row.direct_sun_minutes), backgroundColor: "#f5b82e80", borderColor: "#d59400", borderWidth: 1, borderRadius: 5, yAxisID: "yMinutes" },
+            lineDataset("Lichtindex (%)", rows.map(row => row.light_index), "#c56a00", "yPercent")
+          ]
+        };
+        if (!charts.light) {
+          charts.light = new Chart(document.getElementById("dailyLightChart"), {
+            data: lightData,
+            options: {
+              responsive: true, maintainAspectRatio: false, animation: false,
+              interaction: { mode: "index", intersect: false },
+              scales: {
+                x: { grid: { display: false } },
+                yMinutes: { position: "left", beginAtZero: true, title: { display: true, text: "Minuten" } },
+                yPercent: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: "%" } }
+              }
+            }
+          });
+        } else {
+          charts.light.data = lightData;
+          charts.light.update("none");
+        }
+      } catch (error) {
+        document.getElementById("waterEmpty").textContent = `Diagrammfehler: ${error.message}`;
+        document.getElementById("waterEmpty").classList.remove("hidden");
+      }
+    }
+
+    async function sendCommand(url, options, successMessage) {
+      const feedback = document.getElementById("commandFeedback");
+      feedback.textContent = "Befehl wird gesendet …";
+      try {
+        await fetchJson(url, options);
+        feedback.textContent = successMessage;
+        setTimeout(refreshStatus, 500);
+      } catch (error) {
+        feedback.textContent = `Befehl fehlgeschlagen: ${error.message}`;
+      }
+    }
+
+    function setRelay(name, on) {
+      return sendCommand(`/api/relays/${name}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ on })
-      });
-      setTimeout(refreshStatus, 700);
+      }, `${name}: ${on ? "EIN" : "AUS"} angefordert.`);
     }
 
-    async function toggleAutomation(enabled) {
-      await fetch("/api/automation/toggle", {
+    function toggleAutomation(enabled) {
+      return sendCommand("/api/automation/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled })
-      });
-      setTimeout(refreshStatus, 700);
+      }, `Automatik ${enabled ? "EIN" : "AUS"} angefordert.`);
     }
 
-    async function waterPulse() {
-      const seconds = parseInt(document.getElementById("waterSeconds").value || "10", 10);
-      await fetch("/api/water_pulse", {
+    function waterPulse() {
+      const seconds = Math.max(1, parseInt(document.getElementById("waterSeconds").value || "10", 10));
+      return sendCommand("/api/water_pulse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ seconds })
-      });
-      setTimeout(refreshStatus, 700);
+      }, `Wasserimpuls über ${seconds} Sekunden angefordert.`);
     }
+
     function loadLatestImage() {
       const box = document.getElementById("latest-image-box");
-      const ts = Date.now(); // verhindert Browser-Cache
-      box.innerHTML = `<img src="/latest.jpg?t=${ts}" style="max-width:100%; border-radius:12px;">`;
-     }
-
-    refreshStatus();
-    refreshChart();
-
-    setInterval(refreshStatus, refreshSeconds * 1000);
-    setInterval(refreshChart, chartRefreshSeconds * 1000);
-
-let dailyClimateChart = null;
-let dailyWaterChart = null;
-let dailySunChart = null;
-let dailyLightIndexChart = null;
-
-
-async function refreshDailySummaryCharts() {
-  const response = await fetch("/api/daily_summary");
-  const data = await response.json();
-
-  const labels = data.map(row => row.date);
-
-  const avgTempDay = data.map(row => row.avg_temp_day_c);
-  const avgTempNight = data.map(row => row.avg_temp_night_c);
-  const avgHumidity = data.map(row => row.avg_humidity_percent);
-
-  const waterMl = data.map(row => row.water_ml);
-  const directSunMinutes = data.map(row => row.direct_sun_minutes);
-  const lightIndex = data.map(row => row.light_index);
-  
-  if (dailyLightIndexChart) {
-  dailyLightIndexChart.data.labels = labels;
-  dailyLightIndexChart.data.datasets[0].data = lightIndex;
-  dailyLightIndexChart.update("none");
-} else {
-  dailyLightIndexChart = new Chart(
-    document.getElementById("dailyLightIndexChart"),
-    {
-      type: "bar",
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: "Lichtindex (%)",
-            data: lightIndex,
-            borderColor: "#ffc107",
-            backgroundColor: "rgba(255, 193, 7, 0.35)"
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            max: 100,
-            title: {
-              display: true,
-              text: "Lichtindex (%)"
-            }
-          }
-        }
-      }
+      const image = document.createElement("img");
+      image.alt = "Letzte Gewächshausaufnahme";
+      image.src = `/latest.jpg?t=${Date.now()}`;
+      image.onerror = () => { box.textContent = "Kein Kamerabild verfügbar."; };
+      box.replaceChildren(image);
     }
-  );
-}
-  if (dailyClimateChart) {
-    dailyClimateChart.data.labels = labels;
-    dailyClimateChart.data.datasets[0].data = avgTempDay;
-    dailyClimateChart.data.datasets[1].data = avgTempNight;
-    dailyClimateChart.data.datasets[2].data = avgHumidity;
-    dailyClimateChart.update("none");
-  } else {
-    dailyClimateChart = new Chart(
-      document.getElementById("dailyClimateChart"),
-      {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Ø Temperatur Tag (°C)",
-              data: avgTempDay,
-              yAxisID: "yTemp",
-              tension: 0.25,
-            },
-            {
-              label: "Ø Temperatur Nacht (°C)",
-              data: avgTempNight,
-              yAxisID: "yTemp",
-              tension: 0.25,
-            },
-            {
-              label: "Ø Luftfeuchte (%)",
-              data: avgHumidity,
-              yAxisID: "yPercent",
-              tension: 0.25,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: "index",
-            intersect: false,
-          },
-          scales: {
-            yTemp: {
-              type: "linear",
-              position: "left",
-              title: {
-                display: true,
-                text: "Temperatur (°C)",
-              },
-            },
-            yPercent: {
-              type: "linear",
-              position: "right",
-              min: 0,
-              max: 100,
-              title: {
-                display: true,
-                text: "Luftfeuchte (%)",
-              },
-              grid: {
-                drawOnChartArea: false,
-              },
-            },
-          },
-        },
-      }
-    );
-  }
 
-  if (dailyWaterChart) {
-    dailyWaterChart.data.labels = labels;
-    dailyWaterChart.data.datasets[0].data = waterMl;
-    dailyWaterChart.update("none");
-  } else {
-    dailyWaterChart = new Chart(
-      document.getElementById("dailyWaterChart"),
-      {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Wasserverbrauch (ml)",
-              data: waterMl,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: "Wasser (ml)",
-              },
-            },
-          },
-        },
-      }
-    );
-  }
-
-  if (dailySunChart) {
-    dailySunChart.data.labels = labels;
-    dailySunChart.data.datasets[0].data = directSunMinutes;
-    dailySunChart.update("none");
-  } else {
-    dailySunChart = new Chart(
-      document.getElementById("dailySunChart"),
-      {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Direkte Sonne (min)",
-              data: directSunMinutes,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: "Direkte Sonne (min)",
-              },
-            },
-          },
-        },
-      }
-    );
-  }
-}
-
-refreshDailySummaryCharts();
-setInterval(refreshDailySummaryCharts, {{ config.chart_refresh_seconds * 1000 }});
-  
-</script>
+    renderModel(initialController);
+    if (window.Chart) {
+      chartDefaults();
+      refreshClimateChart();
+      refreshSensorChart();
+      refreshDailyCharts();
+      setInterval(refreshClimateChart, chartRefreshSeconds * 1000);
+      setInterval(refreshSensorChart, chartRefreshSeconds * 1000);
+      setInterval(refreshDailyCharts, chartRefreshSeconds * 1000);
+    }
+    refreshStatus();
+    setInterval(refreshStatus, refreshSeconds * 1000);
+  </script>
 </body>
 </html>
