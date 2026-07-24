@@ -572,10 +572,10 @@ def index():
     state = load_state()
     latest_image = get_latest_image_info()
 
-    if not state.get("last_image_time"):
+    if latest_image["time"] is not None:
         state["last_image_time"] = latest_image["time"]
 
-    if not state.get("last_image_path"):
+    if latest_image["path"] is not None:
         state["last_image_path"] = latest_image["path"]
 
     latest = state.get("climate", {})
@@ -803,6 +803,7 @@ def api_status():
     config = load_config()
     state = load_state()
     latest = read_latest_values()
+    latest_image = get_latest_image_info()
 
     return jsonify({
         "latest": latest,
@@ -825,6 +826,9 @@ def api_status():
             "last_decision_diagnostics", {}
         ),
         "last_safety_overrides": state.get("last_safety_overrides", []),
+        "last_image_time": (
+            latest_image["time"] or state.get("last_image_time")
+        ),
         "run_id": state.get("run_id"),
     })
 

@@ -4,6 +4,7 @@ import importlib.util
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -59,6 +60,26 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"Baseline 1", response.data)
         self.assertIn(b"Ansatz B", response.data)
         self.assertNotIn(b"data: {\\n    data:", response.data)
+
+    def test_latest_image_timestamp_comes_from_image_file(self) -> None:
+        image_dir = self.base_dir / "images"
+        image_dir.mkdir()
+        latest_image = image_dir / "latest.jpg"
+        latest_image.write_bytes(b"test-image")
+        expected = datetime(2026, 7, 24, 14, 30, 0)
+        timestamp = expected.timestamp()
+        os.utime(latest_image, (timestamp, timestamp))
+        self.app_module.save_json(
+            self.app_module.PATHS.state_path,
+            {"last_image_time": "2026-05-02T13:00:18"},
+        )
+
+        response = self.client.get("/")
+        status = self.client.get("/api/status").get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"2026-07-24T14:30:00", response.data)
+        self.assertEqual(status["last_image_time"], "2026-07-24T14:30:00")
 
     def test_config_form_uses_adc_names_and_persists_address(self) -> None:
         response = self.client.get("/config")
