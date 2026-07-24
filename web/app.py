@@ -154,6 +154,7 @@ def load_state():
         "last_watering_reason": None,
         "active_controller": DEFAULT_CONFIG["controller"]["active"],
         "last_decision_reasons": [],
+        "last_decision_diagnostics": {},
         "last_safety_overrides": [],
         "run_id": None,
     })
@@ -807,6 +808,9 @@ def api_status():
             "active_controller", config.get("controller", {}).get("active", "legacy")
         ),
         "last_decision_reasons": state.get("last_decision_reasons", []),
+        "last_decision_diagnostics": state.get(
+            "last_decision_diagnostics", {}
+        ),
         "last_safety_overrides": state.get("last_safety_overrides", []),
         "run_id": state.get("run_id"),
     })

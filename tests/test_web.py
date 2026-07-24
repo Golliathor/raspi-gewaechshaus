@@ -40,7 +40,25 @@ class WebTests(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["active_controller"], "baseline_fixed")
         self.assertIn("last_decision_reasons", data)
+        self.assertIn("last_decision_diagnostics", data)
         self.assertIn("last_safety_overrides", data)
+
+    def test_dashboard_exposes_model_kpis_and_explanations(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        for element_id in (
+            b'id="modelName"',
+            b'id="temperatureKpi"',
+            b'id="soilKpi"',
+            b'id="decisionReasons"',
+            b'id="diagnosticGroups"',
+            b'id="climateChart"',
+            b'id="dailyWaterChart"',
+        ):
+            self.assertIn(element_id, response.data)
+        self.assertIn(b"Baseline 1", response.data)
+        self.assertIn(b"Ansatz B", response.data)
+        self.assertNotIn(b"data: {\\n    data:", response.data)
 
     def test_config_form_uses_adc_names_and_persists_address(self) -> None:
         response = self.client.get("/config")
