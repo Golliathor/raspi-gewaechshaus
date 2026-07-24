@@ -172,8 +172,8 @@ Die Auswahl für Livebetrieb und Dashboard erfolgt über:
   "weather": {
     "enabled": true,
     "provider": "open_meteo",
-    "latitude": 52.52,
-    "longitude": 13.405,
+    "latitude": 50.766778,
+    "longitude": 12.979194,
     "forecast_horizon_hours": 6,
     "refresh_seconds": 900,
     "max_stale_seconds": 3600

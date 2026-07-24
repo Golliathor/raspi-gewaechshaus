@@ -65,6 +65,7 @@ class WeatherClientTests(unittest.TestCase):
         self.assertEqual(built.weather, weather)
 
         config = copy.deepcopy(DEFAULT_CONFIG)
+        config["weather"]["enabled"] = False
         self.assertIsNone(build_weather_service(config))
         config["weather"].update(
             enabled=True,

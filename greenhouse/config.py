@@ -85,10 +85,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
     "weather": {
-        "enabled": False,
+        "enabled": True,
         "provider": "open_meteo",
-        "latitude": None,
-        "longitude": None,
+        "latitude": 50.766778,
+        "longitude": 12.979194,
         "forecast_horizon_hours": 6,
         "refresh_seconds": 900,
         "max_stale_seconds": 3600,
