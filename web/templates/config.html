@@ -92,11 +92,58 @@
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
           <label for="controllerActive">Aktiver Controller</label>
+          {% set controller_labels = {
+            "baseline_fixed": "Baseline 1 · Feste Schwellwerte",
+            "baseline_hysteresis": "Baseline 2 · Hysterese und Sperrzeiten",
+            "adaptive_local": "Ansatz A · Adaptive lokale Regelung",
+            "adaptive_weather": "Ansatz B · Adaptive Wetterregelung",
+            "legacy": "Legacy · Kompatibilitätsmodus"
+          } %}
           <select id="controllerActive" name="controller_active">
             {% for controller_id in controller_ids %}
-            <option value="{{ controller_id }}" {% if controller_id == config.controller.active %}selected{% endif %}>{{ controller_id }}</option>
+            <option value="{{ controller_id }}" {% if controller_id == config.controller.active %}selected{% endif %}>{{ controller_labels.get(controller_id, controller_id) }}</option>
             {% endfor %}
           </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Baseline 1: feste Schwellwerte</h2>
+        <div class="grid">
+          <div><label>Abluft Temperatur (°C)</label><input name="baseline_fixed_exhaust_temperature_threshold_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_temperature_threshold_c }}"></div>
+          <div><label>Abluft Luftfeuchte (%)</label><input name="baseline_fixed_exhaust_humidity_threshold_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_humidity_threshold_percent }}"></div>
+          <div><label>Abluft Mindesttemperatur (°C)</label><input name="baseline_fixed_exhaust_min_temperature_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_min_temperature_c }}"></div>
+          <div><label>Umluft Temperatur (°C)</label><input name="baseline_fixed_circulation_temperature_threshold_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.circulation_temperature_threshold_c }}"></div>
+          <div><label>Umluft Luftfeuchte (%)</label><input name="baseline_fixed_circulation_humidity_threshold_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_fixed.circulation_humidity_threshold_percent }}"></div>
+          <div><label>Bodenfeuchte Grenze (%)</label><input name="baseline_fixed_soil_moisture_threshold_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_fixed.soil_moisture_threshold_percent }}"></div>
+          <div><label>Feste Gießdauer (s)</label><input name="baseline_fixed_watering_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.baseline_fixed.watering_seconds }}"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Baseline 2: Hysterese und Sperrzeiten</h2>
+        <h3>Abluft und Umluft</h3>
+        <div class="grid">
+          <div><label>Abluft Temperatur EIN (°C)</label><input name="baseline_hysteresis_exhaust_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_temperature_on_c }}"></div>
+          <div><label>Abluft Temperatur AUS (°C)</label><input name="baseline_hysteresis_exhaust_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_temperature_off_c }}"></div>
+          <div><label>Abluft Luftfeuchte EIN (%)</label><input name="baseline_hysteresis_exhaust_humidity_on_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_humidity_on_percent }}"></div>
+          <div><label>Abluft Luftfeuchte AUS (%)</label><input name="baseline_hysteresis_exhaust_humidity_off_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_humidity_off_percent }}"></div>
+          <div><label>Abluft Mindesttemperatur (°C)</label><input name="baseline_hysteresis_exhaust_min_temperature_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_min_temperature_c }}"></div>
+          <div><label>Abluft Mindest-EIN (s)</label><input name="baseline_hysteresis_exhaust_min_on_seconds" type="number" min="0" step="1" value="{{ config.controllers.baseline_hysteresis.exhaust_min_on_seconds }}"></div>
+          <div><label>Abluft Mindest-AUS (s)</label><input name="baseline_hysteresis_exhaust_min_off_seconds" type="number" min="0" step="1" value="{{ config.controllers.baseline_hysteresis.exhaust_min_off_seconds }}"></div>
+          <div><label>Umluft Temperatur EIN (°C)</label><input name="baseline_hysteresis_circulation_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_temperature_on_c }}"></div>
+          <div><label>Umluft Temperatur AUS (°C)</label><input name="baseline_hysteresis_circulation_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_temperature_off_c }}"></div>
+          <div><label>Umluft Luftfeuchte EIN (%)</label><input name="baseline_hysteresis_circulation_humidity_on_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_humidity_on_percent }}"></div>
+          <div><label>Umluft Luftfeuchte AUS (%)</label><input name="baseline_hysteresis_circulation_humidity_off_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_humidity_off_percent }}"></div>
+          <div><label>Umluft Mindest-EIN (s)</label><input name="baseline_hysteresis_circulation_min_on_seconds" type="number" min="0" step="1" value="{{ config.controllers.baseline_hysteresis.circulation_min_on_seconds }}"></div>
+          <div><label>Umluft Mindest-AUS (s)</label><input name="baseline_hysteresis_circulation_min_off_seconds" type="number" min="0" step="1" value="{{ config.controllers.baseline_hysteresis.circulation_min_off_seconds }}"></div>
+        </div>
+        <h3>Bewässerung</h3>
+        <div class="grid">
+          <div><label>Bodenfeuchte EIN (%)</label><input name="baseline_hysteresis_soil_moisture_on_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.soil_moisture_on_percent }}"></div>
+          <div><label>Wiederfreigabe ab (%)</label><input name="baseline_hysteresis_soil_moisture_off_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.baseline_hysteresis.soil_moisture_off_percent }}"></div>
+          <div><label>Feste Gießdauer (s)</label><input name="baseline_hysteresis_watering_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.baseline_hysteresis.watering_seconds }}"></div>
+          <div><label>Bewässerungs-Sperrzeit (s)</label><input name="baseline_hysteresis_watering_cooldown_seconds" type="number" min="0" step="1" value="{{ config.controllers.baseline_hysteresis.watering_cooldown_seconds }}"></div>
         </div>
       </div>
 

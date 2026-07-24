@@ -100,6 +100,34 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "history_size": 720,
     },
     "controllers": {
+        "baseline_fixed": {
+            "exhaust_temperature_threshold_c": 28.0,
+            "exhaust_humidity_threshold_percent": 50.0,
+            "exhaust_min_temperature_c": 18.0,
+            "circulation_temperature_threshold_c": 24.0,
+            "circulation_humidity_threshold_percent": 45.0,
+            "soil_moisture_threshold_percent": 35.0,
+            "watering_seconds": 10.0,
+        },
+        "baseline_hysteresis": {
+            "exhaust_temperature_on_c": 28.0,
+            "exhaust_temperature_off_c": 25.0,
+            "exhaust_humidity_on_percent": 50.0,
+            "exhaust_humidity_off_percent": 40.0,
+            "exhaust_min_temperature_c": 18.0,
+            "exhaust_min_on_seconds": 120.0,
+            "exhaust_min_off_seconds": 120.0,
+            "circulation_temperature_on_c": 24.0,
+            "circulation_temperature_off_c": 22.0,
+            "circulation_humidity_on_percent": 45.0,
+            "circulation_humidity_off_percent": 38.0,
+            "circulation_min_on_seconds": 120.0,
+            "circulation_min_off_seconds": 120.0,
+            "soil_moisture_on_percent": 35.0,
+            "soil_moisture_off_percent": 45.0,
+            "watering_seconds": 10.0,
+            "watering_cooldown_seconds": 3600.0,
+        },
         "adaptive_local": {
             "exhaust_temperature_on_c": 28.0,
             "exhaust_temperature_off_c": 25.0,
@@ -270,6 +298,83 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
 
         if controller_id not in registered_controller_ids():
             errors.append(f"controller.active ist unbekannt: {controller_id}")
+
+    baseline_fixed = config.get("controllers", {}).get("baseline_fixed", {})
+    for key in DEFAULT_CONFIG["controllers"]["baseline_fixed"]:
+        try:
+            value = float(baseline_fixed[key])
+            if key.endswith("_percent") and not 0 <= value <= 100:
+                errors.append(
+                    f"controllers.baseline_fixed.{key} muss 0–100 sein"
+                )
+            if key == "watering_seconds" and value <= 0:
+                errors.append(
+                    "controllers.baseline_fixed.watering_seconds "
+                    "muss größer als 0 sein"
+                )
+        except (KeyError, TypeError, ValueError):
+            errors.append(
+                f"controllers.baseline_fixed.{key} muss eine Zahl sein"
+            )
+
+    hysteresis = config.get("controllers", {}).get(
+        "baseline_hysteresis", {}
+    )
+    hysteresis_values: dict[str, float] = {}
+    for key in DEFAULT_CONFIG["controllers"]["baseline_hysteresis"]:
+        try:
+            hysteresis_values[key] = float(hysteresis[key])
+        except (KeyError, TypeError, ValueError):
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} muss eine Zahl sein"
+            )
+
+    for key in (
+        "exhaust_humidity_on_percent",
+        "exhaust_humidity_off_percent",
+        "circulation_humidity_on_percent",
+        "circulation_humidity_off_percent",
+        "soil_moisture_on_percent",
+        "soil_moisture_off_percent",
+    ):
+        if key in hysteresis_values and not 0 <= hysteresis_values[key] <= 100:
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} muss 0–100 sein"
+            )
+
+    for key in (
+        "exhaust_min_on_seconds",
+        "exhaust_min_off_seconds",
+        "circulation_min_on_seconds",
+        "circulation_min_off_seconds",
+        "watering_cooldown_seconds",
+    ):
+        if key in hysteresis_values and hysteresis_values[key] < 0:
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} darf nicht negativ sein"
+            )
+    if hysteresis_values.get("watering_seconds", 1) <= 0:
+        errors.append(
+            "controllers.baseline_hysteresis.watering_seconds "
+            "muss größer als 0 sein"
+        )
+
+    for off_key, on_key in (
+        ("exhaust_temperature_off_c", "exhaust_temperature_on_c"),
+        ("exhaust_humidity_off_percent", "exhaust_humidity_on_percent"),
+        ("circulation_temperature_off_c", "circulation_temperature_on_c"),
+        ("circulation_humidity_off_percent", "circulation_humidity_on_percent"),
+        ("soil_moisture_on_percent", "soil_moisture_off_percent"),
+    ):
+        if (
+            off_key in hysteresis_values
+            and on_key in hysteresis_values
+            and hysteresis_values[off_key] >= hysteresis_values[on_key]
+        ):
+            errors.append(
+                "controllers.baseline_hysteresis: "
+                f"{off_key} muss kleiner als {on_key} sein"
+            )
 
     adaptive = config.get("controllers", {}).get("adaptive_local", {})
     adaptive_keys = tuple(DEFAULT_CONFIG["controllers"]["adaptive_local"])

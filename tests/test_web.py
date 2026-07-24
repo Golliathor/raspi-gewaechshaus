@@ -57,13 +57,56 @@ class WebTests(unittest.TestCase):
             b'id="diagnosticGroups"',
             b'id="climateChart"',
             b'id="dailyWaterChart"',
+            b'id="controllerSelect"',
         ):
             self.assertIn(element_id, response.data)
         self.assertIn(b"Baseline 1", response.data)
         self.assertIn(b"Ansatz B", response.data)
         self.assertIn(b"Chart.getChart(lightCanvas)", response.data)
         self.assertIn(b"dailyChartsRefreshInFlight", response.data)
+        for controller_id in (
+            b"baseline_fixed",
+            b"baseline_hysteresis",
+            b"adaptive_local",
+            b"adaptive_weather",
+        ):
+            self.assertIn(controller_id, response.data)
         self.assertNotIn(b"data: {\\n    data:", response.data)
+
+    def test_controller_api_switches_all_models_and_rejects_unknown_id(self) -> None:
+        for controller_id in (
+            "baseline_fixed",
+            "baseline_hysteresis",
+            "adaptive_local",
+            "adaptive_weather",
+        ):
+            with self.subTest(controller_id=controller_id):
+                response = self.client.post(
+                    "/api/controller",
+                    json={"controller_id": controller_id},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.get_json()["controller_id"], controller_id
+                )
+                self.assertEqual(
+                    self.app_module.load_config()["controller"]["active"],
+                    controller_id,
+                )
+
+        response = self.client.post(
+            "/api/controller",
+            json={"controller_id": "not-a-controller"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "available_controllers",
+            response.get_json(),
+        )
+        self.assertEqual(
+            self.app_module.load_config()["controller"]["active"],
+            "adaptive_weather",
+        )
 
     def test_latest_image_timestamp_comes_from_image_file(self) -> None:
         image_dir = self.base_dir / "images"
@@ -93,6 +136,14 @@ class WebTests(unittest.TestCase):
         self.assertIn(b'name="controller_active"', response.data)
         self.assertIn(
             b'name="adaptive_local_trend_window_seconds"',
+            response.data,
+        )
+        self.assertIn(
+            b'name="baseline_fixed_exhaust_temperature_threshold_c"',
+            response.data,
+        )
+        self.assertIn(
+            b'name="baseline_hysteresis_watering_cooldown_seconds"',
             response.data,
         )
         self.assertIn(b'name="weather_latitude"', response.data)

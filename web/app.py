@@ -586,6 +586,7 @@ def index():
         config=config,
         relay_states=state.get("relays", {}),
         state=state,
+        controller_ids=registered_controller_ids(),
     )
 
 
@@ -741,6 +742,12 @@ def config_page():
                 if value is not None:
                     config[section][key] = value
 
+        for controller_id in ("baseline_fixed", "baseline_hysteresis"):
+            for key in DEFAULT_CONFIG["controllers"][controller_id]:
+                value = parse_float(form.get(f"{controller_id}_{key}"))
+                if value is not None:
+                    config["controllers"][controller_id][key] = value
+
         for key in DEFAULT_CONFIG["controllers"]["adaptive_local"]:
             value = parse_float(form.get(f"adaptive_local_{key}"))
             if value is not None:
@@ -879,6 +886,35 @@ def api_toggle_automation():
         "enabled": enabled,
     })
     return jsonify({"ok": True, "enabled": enabled})
+
+
+@app.route("/api/controller", methods=["POST"])
+def api_set_controller():
+    data = request.get_json(silent=True) or {}
+    controller_id = str(data.get("controller_id", "")).strip()
+    available = registered_controller_ids()
+    if controller_id not in available:
+        return jsonify({
+            "error": "unbekannter controller",
+            "available_controllers": available,
+        }), 400
+
+    ensure_config()
+    config = load_project_config(Path(CONFIG_PATH))
+    old_config = json.loads(json.dumps(config))
+    previous_controller = config["controller"]["active"]
+    config["controller"]["active"] = controller_id
+    try:
+        save_config(config, old_config)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    return jsonify({
+        "ok": True,
+        "controller_id": controller_id,
+        "previous_controller_id": previous_controller,
+        "changed": controller_id != previous_controller,
+    })
 
 
 @app.route("/api/water_pulse", methods=["POST"])

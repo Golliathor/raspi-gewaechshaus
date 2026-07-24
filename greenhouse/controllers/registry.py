@@ -3,10 +3,14 @@ from __future__ import annotations
 from greenhouse.controllers.base import Controller
 from greenhouse.controllers.adaptive_local import AdaptiveLocalController
 from greenhouse.controllers.adaptive_weather import AdaptiveWeatherController
+from greenhouse.controllers.baseline_fixed import BaselineFixedController
+from greenhouse.controllers.baseline_hysteresis import BaselineHysteresisController
 from greenhouse.controllers.legacy import LegacyController
 
 
 _CONTROLLERS = {
+    BaselineFixedController.controller_id: BaselineFixedController,
+    BaselineHysteresisController.controller_id: BaselineHysteresisController,
     AdaptiveLocalController.controller_id: AdaptiveLocalController,
     AdaptiveWeatherController.controller_id: AdaptiveWeatherController,
     LegacyController.controller_id: LegacyController,

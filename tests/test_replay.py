@@ -19,6 +19,31 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_snapshots.csv"
 
 
 class ReplayTests(unittest.TestCase):
+    def test_both_baseline_replays_use_shared_output_contract(self) -> None:
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for controller_id in ("baseline_fixed", "baseline_hysteresis"):
+                with self.subTest(controller_id=controller_id):
+                    output = root / controller_id
+                    results, summary = run_replay(
+                        FIXTURE,
+                        output,
+                        controller_id=controller_id,
+                        config=config,
+                        run_id=f"{controller_id}-test",
+                    )
+                    self.assertEqual(len(results), 3)
+                    self.assertTrue(
+                        all(
+                            result.controller_id == controller_id
+                            for result in results
+                        )
+                    )
+                    self.assertEqual(summary["controller_id"], controller_id)
+                    self.assertTrue((output / "decisions.csv").is_file())
+                    self.assertTrue((output / "metrics.json").is_file())
+
     def test_adaptive_weather_replay_is_deterministic_and_uses_weather(self) -> None:
         config = copy.deepcopy(DEFAULT_CONFIG)
         start = datetime(2026, 7, 24, 12)

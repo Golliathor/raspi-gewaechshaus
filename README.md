@@ -8,12 +8,16 @@ vergleichbare Regelungsvarianten:
 3. adaptive Regelung mit lokaler Sensorik,
 4. adaptive Regelung mit lokaler Sensorik und Wetterdaten.
 
-Der Branch `model/adaptive-weather` implementiert Ansatz B als
-`adaptive_weather`. Er baut direkt auf `adaptive_local` auf, ergänzt
+Der Branch `model/comparison` enthält alle vier Varianten gleichzeitig. Das
+aktive Modell kann im Dashboard nach einer Bestätigung gewechselt werden. Die
+Auswahl wird in der gemeinsamen Konfiguration gespeichert und vom Daemon im
+nächsten Regelzyklus ohne Neustart übernommen. Der Safety-Layer bleibt bei
+jedem Modellwechsel aktiv.
+
+`adaptive_weather` baut direkt auf `adaptive_local` auf, ergänzt
 Wetterkorrekturen und protokolliert jeden verwendeten Wetterwert, Score und
 Schwellwerteingriff. Ohne hinreichend aktuelle Wetterdaten verhält er sich
-deterministisch wie Ansatz A. Beide Controller sowie `legacy` bleiben für
-Vergleichs- und Kompatibilitätstests verfügbar.
+deterministisch wie Ansatz A.
 
 ## Ansatz A: adaptive lokale Regelung
 
@@ -211,23 +215,28 @@ model/baseline-fixed
 model/baseline-hysteresis
 model/adaptive-local
 model/adaptive-weather
+model/comparison
 ```
 
-Alle Branches behalten Snapshot-, Entscheidungs- und Metrikformat unverändert.
-So können ihre Ergebnisse später ohne Sonderkonvertierung verglichen werden.
+Die vier Einzelbranches bleiben eingefrorene, reproduzierbare Versuchsstände.
+`model/comparison` ist für den praktischen Betrieb und den Wechsel über die
+Website vorgesehen. Alle Branches behalten Snapshot-, Entscheidungs- und
+Metrikformat unverändert.
 
 ## Raspberry-Pi-Abnahme
 
 Vor dem ersten Livebetrieb:
 
-1. `GREENHOUSE_BASE_DIR` und `GREENHOUSE_RUN_ID` setzen.
-2. `python -m unittest discover -v` ausführen.
-3. ADC-Adresse und Sensorkanäle auf der Konfigurationsseite prüfen.
-4. Für Ansatz B Wetterabruf, Breiten- und Längengrad konfigurieren und im
+1. Für den Website-Wechsel `git switch model/comparison` und `git pull`
+   ausführen.
+2. `GREENHOUSE_BASE_DIR` und `GREENHOUSE_RUN_ID` setzen.
+3. `python -m unittest discover -v` ausführen.
+4. ADC-Adresse und Sensorkanäle auf der Konfigurationsseite prüfen.
+5. Für Ansatz B Wetterabruf, Breiten- und Längengrad konfigurieren und im
    Status `weather_available` sowie mögliche Abruffehler prüfen.
-5. Automatik zunächst deaktivieren und alle drei Relais einzeln über das
+6. Automatik zunächst deaktivieren und alle drei Relais einzeln über das
    Dashboard prüfen.
-6. Automatik aktivieren und `control_snapshots.csv`,
+7. Automatik aktivieren und `control_snapshots.csv`,
    `control_decisions.csv` sowie Safety-Ereignisse in `actions.csv`
    kontrollieren.
 
