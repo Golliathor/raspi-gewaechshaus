@@ -61,6 +61,8 @@ class WebTests(unittest.TestCase):
             self.assertIn(element_id, response.data)
         self.assertIn(b"Baseline 1", response.data)
         self.assertIn(b"Ansatz B", response.data)
+        self.assertIn(b"Chart.getChart(lightCanvas)", response.data)
+        self.assertIn(b"dailyChartsRefreshInFlight", response.data)
         self.assertNotIn(b"data: {\\n    data:", response.data)
 
     def test_latest_image_timestamp_comes_from_image_file(self) -> None:
