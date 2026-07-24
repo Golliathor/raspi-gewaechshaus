@@ -431,6 +431,9 @@ def main() -> None:
                     ),
                     "active_controller": controller_id,
                     "last_decision_reasons": list(result.requested.reasons),
+                    "last_decision_diagnostics": dict(
+                        result.requested.diagnostics
+                    ),
                     "last_safety_overrides": list(result.safety_overrides),
                     "last_sensor_update": (
                         sensor_timestamp.isoformat(timespec="seconds")
