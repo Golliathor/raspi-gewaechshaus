@@ -46,6 +46,23 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(any("safe_state_after_seconds" in error for error in errors))
         self.assertTrue(any("temperature_min_c" in error for error in errors))
 
+    def test_invalid_adaptive_parameters_and_controller_are_reported(self) -> None:
+        config = load_config(Path("/does/not/exist"))
+        adaptive = config["controllers"]["adaptive_local"]
+        adaptive["trend_minimum_span_seconds"] = 1000
+        adaptive["trend_window_seconds"] = 500
+        adaptive["watering_min_seconds"] = 20
+        adaptive["watering_base_seconds"] = 10
+        adaptive["max_soil_threshold_increase_percent"] = 15
+        adaptive["max_temperature_reduction_c"] = 5
+        config["controller"]["active"] = "not_registered"
+        errors = validate_config(config)
+        self.assertTrue(any("trend_minimum_span_seconds" in error for error in errors))
+        self.assertTrue(any("watering_min_seconds" in error for error in errors))
+        self.assertTrue(any("adaptive Bodenfeuchte" in error for error in errors))
+        self.assertTrue(any("Temperaturhysterese" in error for error in errors))
+        self.assertTrue(any("controller.active ist unbekannt" in error for error in errors))
+
 
 class CalibrationAndSnapshotTests(unittest.TestCase):
     def test_calibration_clamps_and_handles_invalid_range(self) -> None:

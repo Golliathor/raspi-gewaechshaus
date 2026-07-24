@@ -85,10 +85,43 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
     "controller": {
-        "active": "legacy",
-        "history_size": 120,
+        "active": "adaptive_local",
+        "history_size": 720,
     },
     "controllers": {
+        "adaptive_local": {
+            "exhaust_temperature_on_c": 28.0,
+            "exhaust_temperature_off_c": 25.0,
+            "exhaust_humidity_on_percent": 50.0,
+            "exhaust_humidity_off_percent": 40.0,
+            "exhaust_min_temperature_c": 18.0,
+            "exhaust_min_on_seconds": 120.0,
+            "exhaust_min_off_seconds": 120.0,
+            "circulation_temperature_on_c": 24.0,
+            "circulation_temperature_off_c": 22.0,
+            "circulation_humidity_on_percent": 45.0,
+            "circulation_humidity_off_percent": 38.0,
+            "circulation_min_on_seconds": 120.0,
+            "circulation_min_off_seconds": 120.0,
+            "trend_window_seconds": 900.0,
+            "trend_minimum_span_seconds": 120.0,
+            "trend_lookahead_minutes": 10.0,
+            "max_abs_temperature_trend_per_minute": 2.0,
+            "max_abs_humidity_trend_per_minute": 10.0,
+            "max_abs_soil_trend_per_minute": 10.0,
+            "light_adaptation_start_percent": 50.0,
+            "light_temperature_reduction_c": 1.5,
+            "max_temperature_reduction_c": 3.0,
+            "max_humidity_reduction_percent": 10.0,
+            "soil_moisture_on_percent": 35.0,
+            "soil_moisture_off_percent": 45.0,
+            "max_soil_threshold_increase_percent": 5.0,
+            "watering_temperature_reference_c": 25.0,
+            "watering_base_seconds": 10.0,
+            "watering_min_seconds": 5.0,
+            "watering_max_seconds": 30.0,
+            "watering_cooldown_seconds": 3600.0,
+        },
         "legacy": {},
     },
     "safety": {
@@ -203,6 +236,162 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
     controller_id = config.get("controller", {}).get("active")
     if not isinstance(controller_id, str) or not controller_id:
         errors.append("controller.active muss gesetzt sein")
+    else:
+        from greenhouse.controllers.registry import registered_controller_ids
+
+        if controller_id not in registered_controller_ids():
+            errors.append(f"controller.active ist unbekannt: {controller_id}")
+
+    adaptive = config.get("controllers", {}).get("adaptive_local", {})
+    adaptive_keys = tuple(DEFAULT_CONFIG["controllers"]["adaptive_local"])
+    values: dict[str, float] = {}
+    for key in adaptive_keys:
+        try:
+            values[key] = float(adaptive[key])
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"controllers.adaptive_local.{key} muss eine Zahl sein")
+
+    for key in (
+        "exhaust_humidity_on_percent",
+        "exhaust_humidity_off_percent",
+        "circulation_humidity_on_percent",
+        "circulation_humidity_off_percent",
+        "light_adaptation_start_percent",
+        "max_humidity_reduction_percent",
+        "soil_moisture_on_percent",
+        "soil_moisture_off_percent",
+        "max_soil_threshold_increase_percent",
+    ):
+        if key in values and not 0 <= values[key] <= 100:
+            errors.append(f"controllers.adaptive_local.{key} muss 0–100 sein")
+
+    for key in (
+        "exhaust_min_on_seconds",
+        "exhaust_min_off_seconds",
+        "circulation_min_on_seconds",
+        "circulation_min_off_seconds",
+        "max_abs_temperature_trend_per_minute",
+        "max_abs_humidity_trend_per_minute",
+        "max_abs_soil_trend_per_minute",
+        "light_temperature_reduction_c",
+        "max_temperature_reduction_c",
+        "watering_cooldown_seconds",
+    ):
+        if key in values and values[key] < 0:
+            errors.append(
+                f"controllers.adaptive_local.{key} darf nicht negativ sein"
+            )
+
+    for off_key, on_key in (
+        ("exhaust_temperature_off_c", "exhaust_temperature_on_c"),
+        ("exhaust_humidity_off_percent", "exhaust_humidity_on_percent"),
+        ("circulation_temperature_off_c", "circulation_temperature_on_c"),
+        ("circulation_humidity_off_percent", "circulation_humidity_on_percent"),
+        ("soil_moisture_on_percent", "soil_moisture_off_percent"),
+    ):
+        if (
+            off_key in values
+            and on_key in values
+            and values[off_key] >= values[on_key]
+        ):
+            errors.append(
+                f"controllers.adaptive_local: {off_key} "
+                f"muss kleiner als {on_key} sein"
+            )
+
+    if (
+        "trend_minimum_span_seconds" in values
+        and "trend_window_seconds" in values
+        and (
+            values["trend_minimum_span_seconds"] <= 0
+            or values["trend_minimum_span_seconds"]
+            > values["trend_window_seconds"]
+        )
+    ):
+        errors.append(
+            "controllers.adaptive_local.trend_minimum_span_seconds "
+            "muss größer als 0 und höchstens so groß wie das Trendfenster sein"
+        )
+    if values.get("trend_lookahead_minutes", 1) <= 0:
+        errors.append(
+            "controllers.adaptive_local.trend_lookahead_minutes "
+            "muss größer als 0 sein"
+        )
+    if all(
+        key in values
+        for key in (
+            "watering_min_seconds",
+            "watering_base_seconds",
+            "watering_max_seconds",
+        )
+    ) and not (
+        0
+        < values["watering_min_seconds"]
+        <= values["watering_base_seconds"]
+        <= values["watering_max_seconds"]
+    ):
+        errors.append(
+            "controllers.adaptive_local: watering_min_seconds <= "
+            "watering_base_seconds <= watering_max_seconds muss gelten"
+        )
+    if all(
+        key in values
+        for key in (
+            "soil_moisture_on_percent",
+            "max_soil_threshold_increase_percent",
+            "soil_moisture_off_percent",
+        )
+    ) and (
+        values["soil_moisture_on_percent"]
+        + values["max_soil_threshold_increase_percent"]
+        >= values["soil_moisture_off_percent"]
+    ):
+        errors.append(
+            "controllers.adaptive_local: adaptive Bodenfeuchte-EIN-Grenze "
+            "muss unter der AUS-Grenze bleiben"
+        )
+    if all(
+        key in values
+        for key in (
+            "max_temperature_reduction_c",
+            "exhaust_temperature_on_c",
+            "exhaust_temperature_off_c",
+            "circulation_temperature_on_c",
+            "circulation_temperature_off_c",
+        )
+    ):
+        smallest_gap = min(
+            values["exhaust_temperature_on_c"]
+            - values["exhaust_temperature_off_c"],
+            values["circulation_temperature_on_c"]
+            - values["circulation_temperature_off_c"],
+        )
+        if values["max_temperature_reduction_c"] >= 2 * smallest_gap:
+            errors.append(
+                "controllers.adaptive_local.max_temperature_reduction_c "
+                "würde die Temperaturhysterese aufheben"
+            )
+    if all(
+        key in values
+        for key in (
+            "max_humidity_reduction_percent",
+            "exhaust_humidity_on_percent",
+            "exhaust_humidity_off_percent",
+            "circulation_humidity_on_percent",
+            "circulation_humidity_off_percent",
+        )
+    ):
+        smallest_gap = min(
+            values["exhaust_humidity_on_percent"]
+            - values["exhaust_humidity_off_percent"],
+            values["circulation_humidity_on_percent"]
+            - values["circulation_humidity_off_percent"],
+        )
+        if values["max_humidity_reduction_percent"] >= 2 * smallest_gap:
+            errors.append(
+                "controllers.adaptive_local.max_humidity_reduction_percent "
+                "würde die Feuchtehysterese aufheben"
+            )
 
     safety = config.get("safety", {})
     try:

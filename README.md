@@ -8,9 +8,54 @@ vergleichbare Regelungsvarianten:
 3. adaptive Regelung mit lokaler Sensorik,
 4. adaptive Regelung mit lokaler Sensorik und Wetterdaten.
 
-Der Basisstand stellt bewusst nur den bisherigen `legacy`-Regler bereit. Neue
-Regler implementieren dieselbe reine Schnittstelle und können dadurch mit
-identischen Sensordaten getestet werden.
+Der Branch `model/adaptive-local` implementiert Ansatz A als
+`adaptive_local`. Der Regler ist vollständig regelbasiert, verwendet nur lokale
+Sensorik und protokolliert alle berechneten Trends und Anpassungen. Der
+`legacy`-Regler bleibt für Kompatibilitätstests verfügbar.
+
+## Ansatz A: adaptive lokale Regelung
+
+Aus den letzten 15 Minuten werden lineare Trends für Temperatur,
+Luftfeuchtigkeit und mittlere Bodenfeuchtigkeit berechnet. Doppelte
+Sensorzeitstempel werden zusammengefasst; bei weniger als zwei Minuten
+Messspanne wird kein Trend verwendet. Die Standard-Vorausschau beträgt zehn
+Minuten.
+
+Mit `L = clamp((Licht - 50) / 50, 0, 1)` gelten standardmäßig:
+
+```text
+Temperaturabsenkung =
+  clamp(max(0, Temperaturtrend) × 10 + 1,5 × L, 0, 3 °C)
+
+Feuchteabsenkung =
+  clamp(max(0, Feuchtetrend) × 10, 0, 10 %)
+```
+
+Die EIN-Grenzen beider Lüfter werden um die volle Absenkung reduziert, die
+AUS-Grenzen um die Hälfte. Dadurch bleibt eine Hysterese erhalten. Zusätzlich
+gelten je 120 Sekunden Mindest-EIN- und Mindest-AUS-Zeit sowie die harte
+Abluft-Mindesttemperatur von 18 °C.
+
+Für die Bewässerung werden der projizierte Bodenfeuchteverlust `D`, die
+Temperaturbelastung oberhalb 25 °C und die Lichtbelastung verwendet:
+
+```text
+Erhöhung der Gießgrenze =
+  clamp(0,5 × D + 0,3 × Temperaturbelastung + L, 0, 5 %)
+
+Gießdauer =
+  clamp(
+    10 + 0,5 × Feuchtedefizit + 0,5 × D
+       + 0,5 × Temperaturbelastung + 2 × L,
+    5,
+    30 Sekunden
+  )
+```
+
+Nach einer Bewässerung müssen alle aktivierten Bodensensoren mindestens 45 %
+erreichen und die 3600-Sekunden-Sperrzeit muss ablaufen. Dieser Zustand bleibt
+über Daemon-Neustarts erhalten. Wetterfelder werden ausdrücklich ignoriert;
+jedes Entscheidungslog enthält deshalb `weather_used=false`.
 
 ## Architektur
 
@@ -63,7 +108,7 @@ Ein deterministischer Dry-Run mit dem mitgelieferten Fixture:
 
 ```bash
 python -m greenhouse.replay \
-  --controller legacy \
+  --controller adaptive_local \
   --config examples/config.json \
   --input tests/fixtures/replay_snapshots.csv \
   --run-id smoke-test \
@@ -83,21 +128,33 @@ python -m greenhouse.importer \
   --output /tmp/snapshots.csv
 ```
 
-## Controller ergänzen
+## Controller auswählen
 
-Ein neuer Controller erhält eine eindeutige `controller_id`, implementiert
-`decide(snapshot, context, config)` und wird in
-`greenhouse.controllers.registry` registriert. Die Auswahl erfolgt über:
+Die Auswahl für Livebetrieb und Dashboard erfolgt über:
 
 ```json
 {
-  "controller": {"active": "legacy", "history_size": 120},
-  "controllers": {"legacy": {}}
+  "controller": {"active": "adaptive_local", "history_size": 720},
+  "controllers": {
+    "adaptive_local": {
+      "trend_window_seconds": 900,
+      "trend_minimum_span_seconds": 120,
+      "trend_lookahead_minutes": 10,
+      "soil_moisture_on_percent": 35,
+      "soil_moisture_off_percent": 45,
+      "watering_base_seconds": 10,
+      "watering_min_seconds": 5,
+      "watering_max_seconds": 30,
+      "watering_cooldown_seconds": 3600
+    }
+  }
 }
 ```
 
-Für die vier Varianten werden nach dem gemeinsamen Basis-Commit folgende
-Branches verwendet:
+Alle Modellparameter stehen in `examples/config.json` und auf der
+Konfigurationsseite. Ein weiterer Controller erhält eine eindeutige
+`controller_id`, implementiert `decide(snapshot, context, config)` und wird in
+`greenhouse.controllers.registry` registriert. Die Vergleichsbranches sind:
 
 ```text
 model/baseline-fixed

@@ -3,10 +3,43 @@
   "automation_enabled": true,
   "watering_enabled": true,
   "controller": {
-    "active": "legacy",
-    "history_size": 120
+    "active": "adaptive_local",
+    "history_size": 720
   },
   "controllers": {
+    "adaptive_local": {
+      "exhaust_temperature_on_c": 28.0,
+      "exhaust_temperature_off_c": 25.0,
+      "exhaust_humidity_on_percent": 50.0,
+      "exhaust_humidity_off_percent": 40.0,
+      "exhaust_min_temperature_c": 18.0,
+      "exhaust_min_on_seconds": 120.0,
+      "exhaust_min_off_seconds": 120.0,
+      "circulation_temperature_on_c": 24.0,
+      "circulation_temperature_off_c": 22.0,
+      "circulation_humidity_on_percent": 45.0,
+      "circulation_humidity_off_percent": 38.0,
+      "circulation_min_on_seconds": 120.0,
+      "circulation_min_off_seconds": 120.0,
+      "trend_window_seconds": 900.0,
+      "trend_minimum_span_seconds": 120.0,
+      "trend_lookahead_minutes": 10.0,
+      "max_abs_temperature_trend_per_minute": 2.0,
+      "max_abs_humidity_trend_per_minute": 10.0,
+      "max_abs_soil_trend_per_minute": 10.0,
+      "light_adaptation_start_percent": 50.0,
+      "light_temperature_reduction_c": 1.5,
+      "max_temperature_reduction_c": 3.0,
+      "max_humidity_reduction_percent": 10.0,
+      "soil_moisture_on_percent": 35.0,
+      "soil_moisture_off_percent": 45.0,
+      "max_soil_threshold_increase_percent": 5.0,
+      "watering_temperature_reference_c": 25.0,
+      "watering_base_seconds": 10.0,
+      "watering_min_seconds": 5.0,
+      "watering_max_seconds": 30.0,
+      "watering_cooldown_seconds": 3600.0
+    },
     "legacy": {}
   }
 }

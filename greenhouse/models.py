@@ -99,6 +99,8 @@ class ControlContext:
     last_fallback_watering_date: str | None = None
     daily_watering_seconds: float = 0.0
     watering_check_due: bool = False
+    now: datetime | None = None
+    controller_state: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ class ControlDecision:
     watering_seconds: float = 0.0
     reasons: tuple[str, ...] = ()
     diagnostics: Mapping[str, Any] = field(default_factory=dict)
+    controller_state: Mapping[str, Any] = field(default_factory=dict)
 
     def with_changes(self, **changes: Any) -> "ControlDecision":
         return replace(self, **changes)
