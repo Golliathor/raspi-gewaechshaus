@@ -89,10 +89,11 @@
 
     .model-hero {
       display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr);
+      grid-template-columns: minmax(0, 1.5fr) minmax(330px, .8fr);
       overflow: hidden;
       border-top: 5px solid var(--model-accent);
     }
+    .model-main, .model-side { min-width: 0; }
     .model-main { padding: 24px; }
     .model-main h2 { margin: 5px 0 8px; font-size: clamp(1.45rem, 3vw, 2.25rem); }
     .model-main p { margin: 0; color: var(--muted); max-width: 760px; }
@@ -123,19 +124,20 @@
     }
     .meta-row { display: flex; justify-content: space-between; gap: 18px; font-size: .88rem; }
     .meta-row span:first-child { color: var(--muted); }
-    .meta-row strong { text-align: right; overflow-wrap: anywhere; }
+    .meta-row strong { min-width: 0; text-align: right; overflow-wrap: anywhere; }
     .model-switch { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
     .model-switch label { display: block; margin-bottom: 6px; color: var(--muted); font-size: .82rem; }
-    .model-switch-row { display: flex; gap: 8px; align-items: stretch; }
+    .model-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
     .model-switch select {
+      width: 100%;
       min-width: 0;
-      flex: 1;
       padding: 8px 9px;
       border: 1px solid #cbd5ce;
       border-radius: 8px;
       background: #fff;
       color: var(--text);
     }
+    .model-switch button { max-width: 100%; white-space: nowrap; }
     .model-switch-feedback { min-height: 1.25em; margin-top: 6px; color: var(--muted); font-size: .78rem; }
 
     .kpi-grid {
@@ -292,6 +294,32 @@
     .weather-value { padding: 12px; border-radius: 10px; background: var(--surface-soft); }
     .weather-value span { display: block; color: var(--muted); font-size: .76rem; }
     .weather-value strong { font-size: 1.1rem; }
+    .forecast-heading { margin: 18px 0 10px; font-size: 1rem; }
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 10px;
+    }
+    .forecast-card {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface-soft);
+    }
+    .forecast-card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .forecast-card-header span { color: var(--muted); font-size: .76rem; }
+    .forecast-card-header strong { font-size: 1rem; }
+    .forecast-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; }
+    .forecast-detail span { display: block; color: var(--muted); font-size: .68rem; }
+    .forecast-detail strong { display: block; overflow-wrap: anywhere; font-size: .8rem; }
+    .forecast-empty { color: var(--muted); font-size: .86rem; }
 
     .chart-grid {
       display: grid;
@@ -340,6 +368,11 @@
       .chart-wrap { height: 260px; }
       .header-row { align-items: flex-start; }
       nav { width: 100%; }
+    }
+    @media (max-width: 480px) {
+      .model-switch-row { grid-template-columns: 1fr; }
+      .model-switch button { width: 100%; }
+      .meta-row { align-items: flex-start; }
     }
   </style>
 </head>
@@ -509,8 +542,12 @@
       <div class="weather-grid">
         <div class="weather-value"><span>Außentemperatur</span><strong id="weatherTemperature">–</strong></div>
         <div class="weather-value"><span>Außenluftfeuchte</span><strong id="weatherHumidity">–</strong></div>
-        <div class="weather-value"><span>Niederschlag</span><strong id="weatherRain">–</strong></div>
-        <div class="weather-value"><span>Regenwahrscheinlichkeit</span><strong id="weatherProbability">–</strong></div>
+        <div class="weather-value"><span id="weatherRainLabel">Vorhersage-Niederschlag</span><strong id="weatherRain">–</strong></div>
+        <div class="weather-value"><span id="weatherProbabilityLabel">Max. Regenwahrscheinlichkeit</span><strong id="weatherProbability">–</strong></div>
+      </div>
+      <h3 class="forecast-heading" id="weatherForecastHeading">Stündliche Vorhersage</h3>
+      <div class="forecast-grid" id="weatherForecast">
+        <div class="forecast-empty">Noch keine Vorhersage verfügbar.</div>
       </div>
     </section>
 
@@ -979,6 +1016,69 @@
       document.getElementById("weatherHumidity").textContent = formatValue(weather.outside_humidity_percent, "outside_humidity_percent");
       document.getElementById("weatherRain").textContent = formatValue(weather.precipitation_mm, "precipitation_mm");
       document.getElementById("weatherProbability").textContent = formatValue(weather.precipitation_probability_percent, "precipitation_probability_percent");
+      const horizon = Number(
+        weather.forecast_horizon_hours
+        || data.config?.weather?.forecast_horizon_hours
+        || 0
+      );
+      const horizonLabel = horizon > 0 ? ` · ${horizon} h` : "";
+      document.getElementById("weatherRainLabel").textContent = `Vorhersage-Niederschlag${horizonLabel}`;
+      document.getElementById("weatherProbabilityLabel").textContent = `Max. Regenwahrscheinlichkeit${horizonLabel}`;
+      document.getElementById("weatherForecastHeading").textContent = horizon > 0
+        ? `Stündliche Vorhersage · nächste ${horizon} Stunden`
+        : "Stündliche Vorhersage";
+
+      const forecastContainer = document.getElementById("weatherForecast");
+      const forecast = Array.isArray(weather.forecast) ? weather.forecast : [];
+      forecastContainer.replaceChildren();
+      if (!forecast.length) {
+        const empty = document.createElement("div");
+        empty.className = "forecast-empty";
+        empty.textContent = available
+          ? "Der Wetteranbieter hat für dieses Zeitfenster keine Stundenwerte geliefert."
+          : "Keine Vorhersage verfügbar – lokale Regelbasis aktiv.";
+        forecastContainer.appendChild(empty);
+        return;
+      }
+
+      const timeFormatter = new Intl.DateTimeFormat("de-DE", {
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+      forecast.forEach(point => {
+        const card = document.createElement("article");
+        card.className = "forecast-card";
+        const header = document.createElement("div");
+        header.className = "forecast-card-header";
+        const time = document.createElement("span");
+        const parsedTime = new Date(point.timestamp);
+        time.textContent = Number.isNaN(parsedTime.getTime())
+          ? (point.timestamp || "Zeit unbekannt")
+          : timeFormatter.format(parsedTime);
+        const temperature = document.createElement("strong");
+        temperature.textContent = formatValue(point.temperature_c, "temperature_c");
+        header.append(time, temperature);
+
+        const details = document.createElement("div");
+        details.className = "forecast-details";
+        [
+          ["Feuchte", point.humidity_percent, "humidity_percent"],
+          ["Regen", point.precipitation_mm, "precipitation_mm"],
+          ["Risiko", point.precipitation_probability_percent, "precipitation_probability_percent"]
+        ].forEach(([labelText, value, key]) => {
+          const detail = document.createElement("div");
+          detail.className = "forecast-detail";
+          const label = document.createElement("span");
+          label.textContent = labelText;
+          const strong = document.createElement("strong");
+          strong.textContent = formatValue(value, key);
+          detail.append(label, strong);
+          details.appendChild(detail);
+        });
+        card.append(header, details);
+        forecastContainer.appendChild(card);
+      });
     }
 
     function freshnessState(timestamp, staleAfterSeconds) {

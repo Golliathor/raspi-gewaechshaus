@@ -18,6 +18,15 @@ def parse_datetime(value: str | datetime | None) -> datetime | None:
 
 
 @dataclass(frozen=True)
+class WeatherForecastPoint:
+    timestamp: datetime
+    temperature_c: float | None = None
+    humidity_percent: float | None = None
+    precipitation_mm: float | None = None
+    precipitation_probability_percent: float | None = None
+
+
+@dataclass(frozen=True)
 class WeatherSnapshot:
     timestamp: datetime
     outside_temperature_c: float | None = None
@@ -25,6 +34,8 @@ class WeatherSnapshot:
     precipitation_mm: float | None = None
     precipitation_probability_percent: float | None = None
     provider: str | None = None
+    forecast_horizon_hours: int | None = None
+    forecast: tuple[WeatherForecastPoint, ...] = ()
 
 
 @dataclass(frozen=True)

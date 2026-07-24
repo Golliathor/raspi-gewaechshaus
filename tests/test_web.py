@@ -58,6 +58,7 @@ class WebTests(unittest.TestCase):
             b'id="climateChart"',
             b'id="dailyWaterChart"',
             b'id="controllerSelect"',
+            b'id="weatherForecast"',
         ):
             self.assertIn(element_id, response.data)
         self.assertIn(b"Baseline 1", response.data)

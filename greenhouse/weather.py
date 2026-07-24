@@ -7,7 +7,11 @@ from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from greenhouse.models import WeatherSnapshot, parse_datetime
+from greenhouse.models import (
+    WeatherForecastPoint,
+    WeatherSnapshot,
+    parse_datetime,
+)
 
 
 class WeatherProviderError(RuntimeError):
@@ -49,7 +53,10 @@ class OpenMeteoWeatherClient:
                 "latitude": self.latitude,
                 "longitude": self.longitude,
                 "current": "temperature_2m,relative_humidity_2m",
-                "hourly": "precipitation_probability,precipitation",
+                "hourly": (
+                    "temperature_2m,relative_humidity_2m,"
+                    "precipitation_probability,precipitation"
+                ),
                 "forecast_days": 2,
                 "timezone": "auto",
             }
@@ -80,21 +87,37 @@ class OpenMeteoWeatherClient:
         weather_time = parse_datetime(current.get("time")) or now
         end = weather_time + timedelta(hours=self.forecast_horizon_hours)
         hourly_times = hourly.get("time", [])
+        temperatures = hourly.get("temperature_2m", [])
+        humidities = hourly.get("relative_humidity_2m", [])
         probabilities = hourly.get("precipitation_probability", [])
         precipitation = hourly.get("precipitation", [])
         selected_probabilities: list[float] = []
         selected_precipitation: list[float] = []
+        forecast: list[WeatherForecastPoint] = []
 
         for index, raw_time in enumerate(hourly_times):
             timestamp = parse_datetime(raw_time)
             if timestamp is None or timestamp < weather_time or timestamp >= end:
                 continue
+            temperature = self._float_at(temperatures, index)
+            humidity = self._float_at(humidities, index)
             probability = self._float_at(probabilities, index)
             rain = self._float_at(precipitation, index)
             if probability is not None:
                 selected_probabilities.append(probability)
             if rain is not None:
                 selected_precipitation.append(max(0.0, rain))
+            forecast.append(
+                WeatherForecastPoint(
+                    timestamp=timestamp,
+                    temperature_c=temperature,
+                    humidity_percent=humidity,
+                    precipitation_mm=(
+                        max(0.0, rain) if rain is not None else None
+                    ),
+                    precipitation_probability_percent=probability,
+                )
+            )
 
         return WeatherSnapshot(
             timestamp=weather_time,
@@ -115,6 +138,8 @@ class OpenMeteoWeatherClient:
                 else None
             ),
             provider=self.provider_id,
+            forecast_horizon_hours=self.forecast_horizon_hours,
+            forecast=tuple(forecast),
         )
 
     @classmethod
@@ -187,6 +212,13 @@ def weather_to_mapping(snapshot: WeatherSnapshot | None) -> dict[str, Any]:
         return {}
     result = asdict(snapshot)
     result["timestamp"] = snapshot.timestamp.isoformat(timespec="seconds")
+    result["forecast"] = [
+        {
+            **asdict(point),
+            "timestamp": point.timestamp.isoformat(timespec="seconds"),
+        }
+        for point in snapshot.forecast
+    ]
     return result
 
 
@@ -206,6 +238,43 @@ def weather_from_mapping(
         except (TypeError, ValueError):
             return None
 
+    forecast: list[WeatherForecastPoint] = []
+    raw_forecast = data.get("forecast", [])
+    if isinstance(raw_forecast, (list, tuple)):
+        for raw_point in raw_forecast:
+            if not isinstance(raw_point, Mapping):
+                continue
+            point_timestamp = parse_datetime(raw_point.get("timestamp"))
+            if point_timestamp is None:
+                continue
+
+            def point_float(key: str) -> float | None:
+                try:
+                    value = raw_point.get(key)
+                    return None if value in (None, "") else float(value)
+                except (TypeError, ValueError):
+                    return None
+
+            forecast.append(
+                WeatherForecastPoint(
+                    timestamp=point_timestamp,
+                    temperature_c=point_float("temperature_c"),
+                    humidity_percent=point_float("humidity_percent"),
+                    precipitation_mm=point_float("precipitation_mm"),
+                    precipitation_probability_percent=point_float(
+                        "precipitation_probability_percent"
+                    ),
+                )
+            )
+
+    try:
+        raw_horizon = data.get("forecast_horizon_hours")
+        forecast_horizon_hours = (
+            None if raw_horizon in (None, "") else int(raw_horizon)
+        )
+    except (TypeError, ValueError):
+        forecast_horizon_hours = None
+
     return WeatherSnapshot(
         timestamp=timestamp,
         outside_temperature_c=optional_float("outside_temperature_c"),
@@ -215,4 +284,6 @@ def weather_from_mapping(
             "precipitation_probability_percent"
         ),
         provider=data.get("provider") or None,
+        forecast_horizon_hours=forecast_horizon_hours,
+        forecast=tuple(forecast),
     )

@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timedelta
 
 from greenhouse.config import DEFAULT_CONFIG
-from greenhouse.models import WeatherSnapshot
+from greenhouse.models import WeatherForecastPoint, WeatherSnapshot
 from greenhouse.weather import (
     CachedWeatherProvider,
     OpenMeteoWeatherClient,
@@ -93,6 +93,7 @@ class WeatherClientTests(unittest.TestCase):
                     "2026-07-24T15:00",
                 ],
                 "temperature_2m": [23, 25, 27, 29, 31],
+                "relative_humidity_2m": [55, 50, 45, 40, 35],
                 "precipitation_probability": [0, 20, 70, 40, 90],
                 "precipitation": [0, 0.1, 0.5, 1.2, 8],
             },
@@ -113,11 +114,18 @@ class WeatherClientTests(unittest.TestCase):
 
         self.assertIn("latitude=52.5", str(requested["url"]))
         self.assertIn("timezone=auto", str(requested["url"]))
+        self.assertIn("temperature_2m", str(requested["url"]))
+        self.assertIn("relative_humidity_2m", str(requested["url"]))
         self.assertEqual(requested["timeout"], 4)
         self.assertEqual(snapshot.outside_temperature_c, 24.5)
         self.assertEqual(snapshot.outside_humidity_percent, 48)
         self.assertEqual(snapshot.precipitation_mm, 1.8)
         self.assertEqual(snapshot.precipitation_probability_percent, 70)
+        self.assertEqual(snapshot.forecast_horizon_hours, 3)
+        self.assertEqual(len(snapshot.forecast), 3)
+        self.assertEqual(snapshot.forecast[1].temperature_c, 27)
+        self.assertEqual(snapshot.forecast[1].humidity_percent, 45)
+        self.assertEqual(snapshot.forecast[1].precipitation_mm, 0.5)
 
     def test_cache_limits_requests_and_expires_after_provider_failure(self) -> None:
         first = WeatherSnapshot(NOW, outside_temperature_c=20)
@@ -146,11 +154,20 @@ class WeatherClientTests(unittest.TestCase):
             outside_temperature_c=18,
             precipitation_mm=2.5,
             provider="test",
+            forecast_horizon_hours=2,
+            forecast=(
+                WeatherForecastPoint(
+                    NOW + timedelta(hours=1),
+                    temperature_c=19,
+                    humidity_percent=60,
+                    precipitation_mm=0.4,
+                    precipitation_probability_percent=70,
+                ),
+            ),
         )
-        self.assertEqual(
-            weather_from_mapping(weather_to_mapping(original)),
-            original,
-        )
+        mapping = weather_to_mapping(original)
+        json.dumps(mapping)
+        self.assertEqual(weather_from_mapping(mapping), original)
 
 
 if __name__ == "__main__":

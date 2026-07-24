@@ -6,6 +6,7 @@ from .models import (
     ControlContext,
     ControlDecision,
     SensorSnapshot,
+    WeatherForecastPoint,
     WeatherSnapshot,
 )
 
@@ -16,6 +17,7 @@ __all__ = [
     "DEFAULT_CONFIG",
     "ProjectPaths",
     "SensorSnapshot",
+    "WeatherForecastPoint",
     "WeatherSnapshot",
     "load_config",
 ]
