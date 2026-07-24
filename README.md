@@ -8,9 +8,30 @@ vergleichbare Regelungsvarianten:
 3. adaptive Regelung mit lokaler Sensorik,
 4. adaptive Regelung mit lokaler Sensorik und Wetterdaten.
 
-Der Basisstand stellt bewusst nur den bisherigen `legacy`-Regler bereit. Neue
-Regler implementieren dieselbe reine Schnittstelle und können dadurch mit
-identischen Sensordaten getestet werden.
+Der Branch `model/baseline-hysteresis` implementiert die zweite
+Vergleichsvariante als `baseline_hysteresis`. Der bisherige `legacy`-Regler
+bleibt für Kompatibilitäts- und Charakterisierungstests verfügbar.
+
+## Baseline 2: Hysterese und Sperrzeiten
+
+Die Standardregeln sind:
+
+- Abluft EIN ab `28 °C` oder ab `50 %` Luftfeuchte bei mindestens `18 °C`
+- Abluft AUS erst bei höchstens `25 °C` und höchstens `40 %`
+- Umluft EIN ab `24 °C` oder `45 %`, AUS erst bei höchstens `22 °C` und `38 %`
+- beide Lüfter haben jeweils `120 s` Mindest-EIN- und Mindest-AUS-Zeit
+- die harte Abluft-Mindesttemperatur von `18 °C` darf eine Mindest-EIN-Zeit
+  sofort beenden
+- Bewässerung bei Bodenfeuchte `<= 35 %` mit festem `10-s`-Impuls
+- Wiederfreigabe der Bewässerung erst, wenn alle aktivierten Bodensensoren
+  mindestens `45 %` erreicht haben
+- ein weiterer Impuls benötigt sowohl die Wiederfreigabe als auch eine
+  abgelaufene Sperrzeit von `3600 s`
+
+Der Bewässerungs-Freigabestatus und die Aktor-Zeitstempel werden in
+`state.json` persistiert. Ein Neustart setzt Hysterese oder Sperrzeiten daher
+nicht zurück. Die gemeinsame Safety-Schicht kann Anforderungen weiterhin
+begrenzen oder blockieren.
 
 ## Architektur
 
@@ -63,7 +84,7 @@ Ein deterministischer Dry-Run mit dem mitgelieferten Fixture:
 
 ```bash
 python -m greenhouse.replay \
-  --controller legacy \
+  --controller baseline_hysteresis \
   --config examples/config.json \
   --input tests/fixtures/replay_snapshots.csv \
   --run-id smoke-test \
@@ -83,21 +104,41 @@ python -m greenhouse.importer \
   --output /tmp/snapshots.csv
 ```
 
-## Controller ergänzen
+## Controller auswählen
 
-Ein neuer Controller erhält eine eindeutige `controller_id`, implementiert
-`decide(snapshot, context, config)` und wird in
-`greenhouse.controllers.registry` registriert. Die Auswahl erfolgt über:
+Die Auswahl für Livebetrieb und Dashboard erfolgt über:
 
 ```json
 {
-  "controller": {"active": "legacy", "history_size": 120},
-  "controllers": {"legacy": {}}
+  "controller": {"active": "baseline_hysteresis", "history_size": 120},
+  "controllers": {
+    "baseline_hysteresis": {
+      "exhaust_temperature_on_c": 28.0,
+      "exhaust_temperature_off_c": 25.0,
+      "exhaust_humidity_on_percent": 50.0,
+      "exhaust_humidity_off_percent": 40.0,
+      "exhaust_min_temperature_c": 18.0,
+      "exhaust_min_on_seconds": 120.0,
+      "exhaust_min_off_seconds": 120.0,
+      "circulation_temperature_on_c": 24.0,
+      "circulation_temperature_off_c": 22.0,
+      "circulation_humidity_on_percent": 45.0,
+      "circulation_humidity_off_percent": 38.0,
+      "circulation_min_on_seconds": 120.0,
+      "circulation_min_off_seconds": 120.0,
+      "soil_moisture_on_percent": 35.0,
+      "soil_moisture_off_percent": 45.0,
+      "watering_seconds": 10.0,
+      "watering_cooldown_seconds": 3600.0
+    }
+  }
 }
 ```
 
-Für die vier Varianten werden nach dem gemeinsamen Basis-Commit folgende
-Branches verwendet:
+Ein weiterer Controller erhält eine eindeutige `controller_id`, implementiert
+`decide(snapshot, context, config)` und wird in
+`greenhouse.controllers.registry` registriert. Die vier Vergleichsbranches
+sind:
 
 ```text
 model/baseline-fixed

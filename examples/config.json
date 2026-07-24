@@ -3,10 +3,29 @@
   "automation_enabled": true,
   "watering_enabled": true,
   "controller": {
-    "active": "legacy",
+    "active": "baseline_hysteresis",
     "history_size": 120
   },
   "controllers": {
+    "baseline_hysteresis": {
+      "exhaust_temperature_on_c": 28.0,
+      "exhaust_temperature_off_c": 25.0,
+      "exhaust_humidity_on_percent": 50.0,
+      "exhaust_humidity_off_percent": 40.0,
+      "exhaust_min_temperature_c": 18.0,
+      "exhaust_min_on_seconds": 120.0,
+      "exhaust_min_off_seconds": 120.0,
+      "circulation_temperature_on_c": 24.0,
+      "circulation_temperature_off_c": 22.0,
+      "circulation_humidity_on_percent": 45.0,
+      "circulation_humidity_off_percent": 38.0,
+      "circulation_min_on_seconds": 120.0,
+      "circulation_min_off_seconds": 120.0,
+      "soil_moisture_on_percent": 35.0,
+      "soil_moisture_off_percent": 45.0,
+      "watering_seconds": 10.0,
+      "watering_cooldown_seconds": 3600.0
+    },
     "legacy": {}
   }
 }

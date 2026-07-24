@@ -85,10 +85,29 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
     "controller": {
-        "active": "legacy",
+        "active": "baseline_hysteresis",
         "history_size": 120,
     },
     "controllers": {
+        "baseline_hysteresis": {
+            "exhaust_temperature_on_c": 28.0,
+            "exhaust_temperature_off_c": 25.0,
+            "exhaust_humidity_on_percent": 50.0,
+            "exhaust_humidity_off_percent": 40.0,
+            "exhaust_min_temperature_c": 18.0,
+            "exhaust_min_on_seconds": 120.0,
+            "exhaust_min_off_seconds": 120.0,
+            "circulation_temperature_on_c": 24.0,
+            "circulation_temperature_off_c": 22.0,
+            "circulation_humidity_on_percent": 45.0,
+            "circulation_humidity_off_percent": 38.0,
+            "circulation_min_on_seconds": 120.0,
+            "circulation_min_off_seconds": 120.0,
+            "soil_moisture_on_percent": 35.0,
+            "soil_moisture_off_percent": 45.0,
+            "watering_seconds": 10.0,
+            "watering_cooldown_seconds": 3600.0,
+        },
         "legacy": {},
     },
     "safety": {
@@ -203,6 +222,89 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
     controller_id = config.get("controller", {}).get("active")
     if not isinstance(controller_id, str) or not controller_id:
         errors.append("controller.active muss gesetzt sein")
+    else:
+        from greenhouse.controllers.registry import registered_controller_ids
+
+        if controller_id not in registered_controller_ids():
+            errors.append(f"controller.active ist unbekannt: {controller_id}")
+
+    hysteresis = config.get("controllers", {}).get(
+        "baseline_hysteresis", {}
+    )
+    hysteresis_keys = (
+        "exhaust_temperature_on_c",
+        "exhaust_temperature_off_c",
+        "exhaust_humidity_on_percent",
+        "exhaust_humidity_off_percent",
+        "exhaust_min_temperature_c",
+        "exhaust_min_on_seconds",
+        "exhaust_min_off_seconds",
+        "circulation_temperature_on_c",
+        "circulation_temperature_off_c",
+        "circulation_humidity_on_percent",
+        "circulation_humidity_off_percent",
+        "circulation_min_on_seconds",
+        "circulation_min_off_seconds",
+        "soil_moisture_on_percent",
+        "soil_moisture_off_percent",
+        "watering_seconds",
+        "watering_cooldown_seconds",
+    )
+    values: dict[str, float] = {}
+    for key in hysteresis_keys:
+        try:
+            values[key] = float(hysteresis[key])
+        except (KeyError, TypeError, ValueError):
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} muss eine Zahl sein"
+            )
+
+    for key in (
+        "exhaust_humidity_on_percent",
+        "exhaust_humidity_off_percent",
+        "circulation_humidity_on_percent",
+        "circulation_humidity_off_percent",
+        "soil_moisture_on_percent",
+        "soil_moisture_off_percent",
+    ):
+        if key in values and not 0 <= values[key] <= 100:
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} muss 0–100 sein"
+            )
+
+    for key in (
+        "exhaust_min_on_seconds",
+        "exhaust_min_off_seconds",
+        "circulation_min_on_seconds",
+        "circulation_min_off_seconds",
+        "watering_cooldown_seconds",
+    ):
+        if key in values and values[key] < 0:
+            errors.append(
+                f"controllers.baseline_hysteresis.{key} darf nicht negativ sein"
+            )
+    if values.get("watering_seconds", 1) <= 0:
+        errors.append(
+            "controllers.baseline_hysteresis.watering_seconds "
+            "muss größer als 0 sein"
+        )
+
+    for off_key, on_key in (
+        ("exhaust_temperature_off_c", "exhaust_temperature_on_c"),
+        ("exhaust_humidity_off_percent", "exhaust_humidity_on_percent"),
+        ("circulation_temperature_off_c", "circulation_temperature_on_c"),
+        ("circulation_humidity_off_percent", "circulation_humidity_on_percent"),
+        ("soil_moisture_on_percent", "soil_moisture_off_percent"),
+    ):
+        if (
+            off_key in values
+            and on_key in values
+            and values[off_key] >= values[on_key]
+        ):
+            errors.append(
+                "controllers.baseline_hysteresis: "
+                f"{off_key} muss kleiner als {on_key} sein"
+            )
 
     safety = config.get("safety", {})
     try:

@@ -14,6 +14,32 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_snapshots.csv"
 
 
 class ReplayTests(unittest.TestCase):
+    def test_hysteresis_replay_uses_shared_output_contract(self) -> None:
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            results, summary = run_replay(
+                FIXTURE,
+                Path(directory),
+                controller_id="baseline_hysteresis",
+                config=config,
+                run_id="baseline-hysteresis-test",
+            )
+            decisions = (Path(directory) / "decisions.csv").read_text(
+                encoding="utf-8"
+            )
+
+        self.assertEqual(len(results), 3)
+        self.assertTrue(
+            all(
+                result.controller_id == "baseline_hysteresis"
+                for result in results
+            )
+        )
+        self.assertEqual(summary["controller_id"], "baseline_hysteresis")
+        self.assertIn(
+            "baseline-hysteresis-test,baseline_hysteresis", decisions
+        )
+
     def test_replay_is_deterministic_and_reports_metrics(self) -> None:
         config = copy.deepcopy(DEFAULT_CONFIG)
         with tempfile.TemporaryDirectory() as first_directory, tempfile.TemporaryDirectory() as second_directory:

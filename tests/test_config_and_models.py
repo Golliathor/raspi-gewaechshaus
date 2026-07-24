@@ -46,6 +46,19 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(any("safe_state_after_seconds" in error for error in errors))
         self.assertTrue(any("temperature_min_c" in error for error in errors))
 
+    def test_invalid_hysteresis_and_unknown_controller_are_reported(self) -> None:
+        config = load_config(Path("/does/not/exist"))
+        config["controllers"]["baseline_hysteresis"][
+            "soil_moisture_on_percent"
+        ] = 50
+        config["controllers"]["baseline_hysteresis"][
+            "soil_moisture_off_percent"
+        ] = 45
+        config["controller"]["active"] = "not_registered"
+        errors = validate_config(config)
+        self.assertTrue(any("soil_moisture_on_percent" in error for error in errors))
+        self.assertTrue(any("controller.active ist unbekannt" in error for error in errors))
+
 
 class CalibrationAndSnapshotTests(unittest.TestCase):
     def test_calibration_clamps_and_handles_invalid_range(self) -> None:

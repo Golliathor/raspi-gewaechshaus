@@ -23,6 +23,7 @@ from greenhouse.config import (
     load_config as load_project_config,
     validate_config,
 )
+from greenhouse.controllers import registered_controller_ids
 
 app = Flask(__name__)
 
@@ -151,7 +152,7 @@ def load_state():
         "last_sensor_update": None,
         "last_watering_at": None,
         "last_watering_reason": None,
-        "active_controller": "legacy",
+        "active_controller": DEFAULT_CONFIG["controller"]["active"],
         "last_decision_reasons": [],
         "last_safety_overrides": [],
         "run_id": None,
@@ -612,6 +613,11 @@ def config_page():
     if request.method == "POST":
         form = request.form
         config["greenhouse_name"] = form.get("greenhouse_name", config["greenhouse_name"])
+        requested_controller = form.get(
+            "controller_active", config["controller"]["active"]
+        )
+        if requested_controller in registered_controller_ids():
+            config["controller"]["active"] = requested_controller
 
         numeric_keys = [
             "exhaust_temp_on_c",
@@ -734,6 +740,29 @@ def config_page():
                 if value is not None:
                     config[section][key] = value
 
+        for key in (
+            "exhaust_temperature_on_c",
+            "exhaust_temperature_off_c",
+            "exhaust_humidity_on_percent",
+            "exhaust_humidity_off_percent",
+            "exhaust_min_temperature_c",
+            "exhaust_min_on_seconds",
+            "exhaust_min_off_seconds",
+            "circulation_temperature_on_c",
+            "circulation_temperature_off_c",
+            "circulation_humidity_on_percent",
+            "circulation_humidity_off_percent",
+            "circulation_min_on_seconds",
+            "circulation_min_off_seconds",
+            "soil_moisture_on_percent",
+            "soil_moisture_off_percent",
+            "watering_seconds",
+            "watering_cooldown_seconds",
+        ):
+            value = parse_float(form.get(f"baseline_hysteresis_{key}"))
+            if value is not None:
+                config["controllers"]["baseline_hysteresis"][key] = value
+
         try:
             save_config(config, old_config)
         except ValueError as error:
@@ -745,6 +774,7 @@ def config_page():
                 state=state,
                 latest=latest,
                 config_error=str(error),
+                controller_ids=registered_controller_ids(),
             ), 400
         return redirect(url_for("config_page"))
 
@@ -756,6 +786,7 @@ def config_page():
         config=config,
         state=state,
         latest=latest,
+        controller_ids=registered_controller_ids(),
     )
 
 
@@ -783,7 +814,10 @@ def api_status():
         "last_watering_at": state.get("last_watering_at"),
         "last_watering_reason": state.get("last_watering_reason"),
         "active_controller": state.get(
-            "active_controller", config.get("controller", {}).get("active", "legacy")
+            "active_controller",
+            config.get("controller", {}).get(
+                "active", DEFAULT_CONFIG["controller"]["active"]
+            ),
         ),
         "last_decision_reasons": state.get("last_decision_reasons", []),
         "last_safety_overrides": state.get("last_safety_overrides", []),

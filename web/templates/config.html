@@ -11,7 +11,7 @@
     .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
     .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     label { display: block; font-size: 0.95rem; margin-bottom: 4px; }
-    input[type="text"], input[type="number"], input[type="time"] {
+    input[type="text"], input[type="number"], input[type="time"], select {
       width: 100%;
       box-sizing: border-box;
       padding: 10px;
@@ -91,21 +91,57 @@
         <div style="margin-top:12px;">
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
-          <div>Aktiver Controller: <strong>{{ config.controller.active }}</strong></div>
+          <label for="controllerActive">Aktiver Controller</label>
+          <select id="controllerActive" name="controller_active">
+            {% for controller_id in controller_ids %}
+            <option value="{{ controller_id }}" {% if controller_id == config.controller.active %}selected{% endif %}>{{ controller_id }}</option>
+            {% endfor %}
+          </select>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Baseline 2: Hysterese und Sperrzeiten</h2>
+        <h3>Abluft</h3>
+        <div class="grid">
+          <div><label>Temperatur EIN (°C)</label><input name="baseline_hysteresis_exhaust_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_temperature_on_c }}"></div>
+          <div><label>Temperatur AUS (°C)</label><input name="baseline_hysteresis_exhaust_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_temperature_off_c }}"></div>
+          <div><label>Luftfeuchte EIN (%)</label><input name="baseline_hysteresis_exhaust_humidity_on_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_humidity_on_percent }}"></div>
+          <div><label>Luftfeuchte AUS (%)</label><input name="baseline_hysteresis_exhaust_humidity_off_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_humidity_off_percent }}"></div>
+          <div><label>Harte Mindesttemperatur (°C)</label><input name="baseline_hysteresis_exhaust_min_temperature_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.exhaust_min_temperature_c }}"></div>
+          <div><label>Mindestlaufzeit EIN (s)</label><input name="baseline_hysteresis_exhaust_min_on_seconds" type="number" step="1" min="0" value="{{ config.controllers.baseline_hysteresis.exhaust_min_on_seconds }}"></div>
+          <div><label>Mindestsperrzeit AUS (s)</label><input name="baseline_hysteresis_exhaust_min_off_seconds" type="number" step="1" min="0" value="{{ config.controllers.baseline_hysteresis.exhaust_min_off_seconds }}"></div>
+        </div>
+        <h3>Umluft</h3>
+        <div class="grid">
+          <div><label>Temperatur EIN (°C)</label><input name="baseline_hysteresis_circulation_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_temperature_on_c }}"></div>
+          <div><label>Temperatur AUS (°C)</label><input name="baseline_hysteresis_circulation_temperature_off_c" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_temperature_off_c }}"></div>
+          <div><label>Luftfeuchte EIN (%)</label><input name="baseline_hysteresis_circulation_humidity_on_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_humidity_on_percent }}"></div>
+          <div><label>Luftfeuchte AUS (%)</label><input name="baseline_hysteresis_circulation_humidity_off_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.circulation_humidity_off_percent }}"></div>
+          <div><label>Mindestlaufzeit EIN (s)</label><input name="baseline_hysteresis_circulation_min_on_seconds" type="number" step="1" min="0" value="{{ config.controllers.baseline_hysteresis.circulation_min_on_seconds }}"></div>
+          <div><label>Mindestsperrzeit AUS (s)</label><input name="baseline_hysteresis_circulation_min_off_seconds" type="number" step="1" min="0" value="{{ config.controllers.baseline_hysteresis.circulation_min_off_seconds }}"></div>
+        </div>
+        <h3>Bewässerung</h3>
+        <div class="grid">
+          <div><label>Bodenfeuchte EIN (%)</label><input name="baseline_hysteresis_soil_moisture_on_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.soil_moisture_on_percent }}"></div>
+          <div><label>Wiederfreigabe ab (%)</label><input name="baseline_hysteresis_soil_moisture_off_percent" type="number" step="0.1" value="{{ config.controllers.baseline_hysteresis.soil_moisture_off_percent }}"></div>
+          <div><label>Feste Gießdauer (s)</label><input name="baseline_hysteresis_watering_seconds" type="number" step="0.1" min="0.1" value="{{ config.controllers.baseline_hysteresis.watering_seconds }}"></div>
+          <div><label>Bewässerungs-Sperrzeit (s)</label><input name="baseline_hysteresis_watering_cooldown_seconds" type="number" step="1" min="0" value="{{ config.controllers.baseline_hysteresis.watering_cooldown_seconds }}"></div>
+        </div>
+        <p>Die harte Mindesttemperatur kann die Abluft-Mindestlaufzeit sofort beenden. Safety-Limits gelten zusätzlich.</p>
       </div>
 
       <div class="card">
         <h2>Bewässerung</h2>
         <div class="grid">
           <div>
-            <label>Normale Gießdauer (s)</label>
+            <label>Legacy-/manuelle Gießdauer (s)</label>
             <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
             <label>Durchflussrate Wasser (ml/s)</label>
             <input type="number" step="0.1" name="water_flow_ml_per_second" value="{{ config.water_flow_ml_per_second }}">
           </div>
           <div>
-            <label>Fallback täglich (s)</label>
+            <label>Legacy-Fallback täglich (s)</label>
             <input name="watering_fallback_seconds" type="number" value="{{ config.watering_fallback_seconds }}">
           </div>
           <div>
@@ -120,7 +156,7 @@
       </div>
 
       <div class="card">
-        <h2>Lüfter</h2>
+        <h2>Legacy-Regler: Lüfter</h2>
         <div class="grid">
           <div><label>Abluft Temp EIN</label><input name="exhaust_temp_on_c" type="number" step="0.1" value="{{ config.exhaust_temp_on_c }}"></div>
           <div><label>Abluft Temp AUS</label><input name="exhaust_temp_off_c" type="number" step="0.1" value="{{ config.exhaust_temp_off_c }}"></div>
