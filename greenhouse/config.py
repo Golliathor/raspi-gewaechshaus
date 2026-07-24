@@ -84,8 +84,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "camera_hflip": False,
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
+    "weather": {
+        "enabled": False,
+        "provider": "open_meteo",
+        "latitude": None,
+        "longitude": None,
+        "forecast_horizon_hours": 6,
+        "refresh_seconds": 900,
+        "max_stale_seconds": 3600,
+        "request_timeout_seconds": 10,
+        "base_url": "https://api.open-meteo.com/v1/forecast",
+    },
     "controller": {
-        "active": "adaptive_local",
+        "active": "adaptive_weather",
         "history_size": 720,
     },
     "controllers": {
@@ -121,6 +132,24 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "watering_min_seconds": 5.0,
             "watering_max_seconds": 30.0,
             "watering_cooldown_seconds": 3600.0,
+        },
+        "adaptive_weather": {
+            "weather_max_age_seconds": 3600.0,
+            "outdoor_temperature_difference_scale_c": 10.0,
+            "absolute_humidity_difference_scale_g_m3": 5.0,
+            "max_outdoor_temperature_adjustment_c": 1.5,
+            "max_outdoor_humidity_adjustment_percent": 5.0,
+            "outdoor_heat_reference_c": 28.0,
+            "outdoor_heat_scale_c": 8.0,
+            "rain_probability_threshold_percent": 60.0,
+            "rain_amount_reference_mm": 5.0,
+            "max_heat_soil_threshold_increase_percent": 2.0,
+            "max_rain_soil_threshold_reduction_percent": 2.0,
+            "max_heat_watering_increase": 0.3,
+            "max_rain_watering_reduction": 0.3,
+            "watering_multiplier_min": 0.7,
+            "watering_multiplier_max": 1.3,
+            "critical_soil_moisture_percent": 20.0,
         },
         "legacy": {},
     },
@@ -392,6 +421,96 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
                 "controllers.adaptive_local.max_humidity_reduction_percent "
                 "würde die Feuchtehysterese aufheben"
             )
+
+    adaptive_weather = config.get("controllers", {}).get(
+        "adaptive_weather", {}
+    )
+    weather_values: dict[str, float] = {}
+    for key in DEFAULT_CONFIG["controllers"]["adaptive_weather"]:
+        try:
+            weather_values[key] = float(adaptive_weather[key])
+        except (KeyError, TypeError, ValueError):
+            errors.append(
+                f"controllers.adaptive_weather.{key} muss eine Zahl sein"
+            )
+
+    for key in (
+        "rain_probability_threshold_percent",
+        "critical_soil_moisture_percent",
+    ):
+        if key in weather_values and not 0 <= weather_values[key] <= 100:
+            errors.append(
+                f"controllers.adaptive_weather.{key} muss 0–100 sein"
+            )
+    for key, value in weather_values.items():
+        if key not in {"outdoor_heat_reference_c"} and value < 0:
+            errors.append(
+                f"controllers.adaptive_weather.{key} darf nicht negativ sein"
+            )
+    if (
+        "watering_multiplier_min" in weather_values
+        and "watering_multiplier_max" in weather_values
+        and not (
+            0
+            < weather_values["watering_multiplier_min"]
+            <= 1.0
+            <= weather_values["watering_multiplier_max"]
+        )
+    ):
+        errors.append(
+            "controllers.adaptive_weather: watering_multiplier_min <= 1 "
+            "<= watering_multiplier_max muss gelten"
+        )
+
+    weather = config.get("weather", {})
+    if weather.get("provider", "open_meteo") != "open_meteo":
+        errors.append("weather.provider muss open_meteo sein")
+    for key in (
+        "forecast_horizon_hours",
+        "refresh_seconds",
+        "max_stale_seconds",
+        "request_timeout_seconds",
+    ):
+        try:
+            if float(weather[key]) <= 0:
+                errors.append(f"weather.{key} muss größer als 0 sein")
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"weather.{key} muss eine Zahl sein")
+    try:
+        horizon = float(weather["forecast_horizon_hours"])
+        if horizon > 48:
+            errors.append(
+                "weather.forecast_horizon_hours darf höchstens 48 sein"
+            )
+    except (KeyError, TypeError, ValueError):
+        pass
+    try:
+        if float(weather["max_stale_seconds"]) < float(
+            weather["refresh_seconds"]
+        ):
+            errors.append(
+                "weather.max_stale_seconds muss mindestens "
+                "weather.refresh_seconds entsprechen"
+            )
+    except (KeyError, TypeError, ValueError):
+        pass
+    if not str(weather.get("base_url", "")).startswith("https://"):
+        errors.append("weather.base_url muss eine HTTPS-URL sein")
+    if weather.get("enabled", False):
+        try:
+            latitude = float(weather["latitude"])
+            if not -90 <= latitude <= 90:
+                errors.append("weather.latitude muss zwischen -90 und 90 liegen")
+        except (KeyError, TypeError, ValueError):
+            errors.append("weather.latitude muss für Wetterabrufe gesetzt sein")
+        try:
+            longitude = float(weather["longitude"])
+            if not -180 <= longitude <= 180:
+                errors.append(
+                    "weather.longitude muss zwischen -180 und 180 liegen"
+                )
+        except (KeyError, TypeError, ValueError):
+            errors.append("weather.longitude muss für Wetterabrufe gesetzt sein")
 
     safety = config.get("safety", {})
     try:

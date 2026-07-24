@@ -38,9 +38,11 @@ class WebTests(unittest.TestCase):
         response = self.client.get("/api/status")
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertEqual(data["active_controller"], "adaptive_local")
+        self.assertEqual(data["active_controller"], "adaptive_weather")
         self.assertIn("last_decision_reasons", data)
         self.assertIn("last_safety_overrides", data)
+        self.assertIn("weather_available", data)
+        self.assertIn("last_weather_error", data)
 
     def test_config_form_uses_adc_names_and_persists_address(self) -> None:
         response = self.client.get("/config")
@@ -50,6 +52,11 @@ class WebTests(unittest.TestCase):
         self.assertIn(b'name="controller_active"', response.data)
         self.assertIn(
             b'name="adaptive_local_trend_window_seconds"',
+            response.data,
+        )
+        self.assertIn(b'name="weather_latitude"', response.data)
+        self.assertIn(
+            b'name="adaptive_weather_weather_max_age_seconds"',
             response.data,
         )
 
@@ -63,6 +70,10 @@ class WebTests(unittest.TestCase):
                 "watering_enabled": "on",
                 "controller_active": "adaptive_local",
                 "adaptive_local_trend_window_seconds": "1200",
+                "weather_enabled": "on",
+                "weather_latitude": "52.52",
+                "weather_longitude": "13.405",
+                "adaptive_weather_weather_max_age_seconds": "1800",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -72,6 +83,14 @@ class WebTests(unittest.TestCase):
         self.assertEqual(
             saved["controllers"]["adaptive_local"]["trend_window_seconds"],
             1200,
+        )
+        self.assertTrue(saved["weather"]["enabled"])
+        self.assertEqual(saved["weather"]["latitude"], 52.52)
+        self.assertEqual(
+            saved["controllers"]["adaptive_weather"][
+                "weather_max_age_seconds"
+            ],
+            1800,
         )
 
 

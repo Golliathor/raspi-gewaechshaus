@@ -11,6 +11,7 @@ class AdaptiveLocalController:
     """Nachvollziehbare adaptive Regelung ausschließlich mit lokaler Sensorik."""
 
     controller_id = "adaptive_local"
+    watering_activation_reason = "watering_on_adaptive_local_demand"
 
     def decide(
         self,
@@ -36,6 +37,12 @@ class AdaptiveLocalController:
         )
         adaptive = self._adaptive_values(
             snapshot, trends, controller_config
+        )
+        adaptive, external_diagnostics = self._apply_external_adjustments(
+            snapshot,
+            now,
+            controller_config,
+            adaptive,
         )
 
         if snapshot.temperature_c is None or snapshot.humidity_percent is None:
@@ -93,7 +100,7 @@ class AdaptiveLocalController:
                 "temperature_c": snapshot.temperature_c,
                 "humidity_percent": snapshot.humidity_percent,
                 "light_percent": snapshot.light_percent,
-                "weather_used": False,
+                **external_diagnostics,
                 "trends_per_minute": {
                     key: round(value, 4) for key, value in trends.items()
                 },
@@ -114,6 +121,19 @@ class AdaptiveLocalController:
             },
             controller_state=next_controller_state,
         )
+
+    @classmethod
+    def _apply_external_adjustments(
+        cls,
+        snapshot: SensorSnapshot,
+        now: datetime,
+        config: Mapping[str, Any],
+        adaptive: Mapping[str, float],
+    ) -> tuple[dict[str, float], dict[str, Any]]:
+        return dict(adaptive), {
+            "weather_used": False,
+            "weather_status": "ignored",
+        }
 
     @classmethod
     def _calculate_trends(
@@ -487,13 +507,13 @@ class AdaptiveLocalController:
                     + adaptive["projected_soil_drop_percent"] * 0.5
                     + adaptive["temperature_stress_c"] * 0.5
                     + adaptive["light_factor"] * 2.0
-                )
+                ) * adaptive.get("watering_duration_multiplier", 1.0)
                 duration = cls._clamp(
                     raw_duration,
                     cls._number(controller_config, "watering_min_seconds", 5.0),
                     cls._number(controller_config, "watering_max_seconds", 30.0),
                 )
-                reason = "watering_on_adaptive_local_demand"
+                reason = cls.watering_activation_reason
                 armed = False
 
         state["watering_armed"] = armed

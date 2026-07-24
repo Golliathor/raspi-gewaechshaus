@@ -745,6 +745,30 @@ def config_page():
             if value is not None:
                 config["controllers"]["adaptive_local"][key] = value
 
+        config["weather"]["enabled"] = form.get("weather_enabled") == "on"
+        config["weather"]["provider"] = form.get(
+            "weather_provider", "open_meteo"
+        )
+        config["weather"]["base_url"] = form.get(
+            "weather_base_url", config["weather"]["base_url"]
+        )
+        for key in (
+            "latitude",
+            "longitude",
+            "forecast_horizon_hours",
+            "refresh_seconds",
+            "max_stale_seconds",
+            "request_timeout_seconds",
+        ):
+            value = parse_float(form.get(f"weather_{key}"))
+            if value is not None:
+                config["weather"][key] = value
+
+        for key in DEFAULT_CONFIG["controllers"]["adaptive_weather"]:
+            value = parse_float(form.get(f"adaptive_weather_{key}"))
+            if value is not None:
+                config["controllers"]["adaptive_weather"][key] = value
+
         try:
             save_config(config, old_config)
         except ValueError as error:
@@ -803,6 +827,9 @@ def api_status():
         ),
         "last_decision_reasons": state.get("last_decision_reasons", []),
         "last_safety_overrides": state.get("last_safety_overrides", []),
+        "weather": state.get("weather", {}),
+        "weather_available": state.get("weather_available", False),
+        "last_weather_error": state.get("last_weather_error"),
         "run_id": state.get("run_id"),
     })
 

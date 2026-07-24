@@ -94,7 +94,6 @@ class AdaptiveLocalControllerTests(unittest.TestCase):
 
     def test_controller_is_registered_active_and_valid(self) -> None:
         self.assertIn("adaptive_local", registered_controller_ids())
-        self.assertEqual(self.config["controller"]["active"], "adaptive_local")
         self.assertEqual(validate_config(self.config), [])
 
     def test_rising_temperature_turns_exhaust_on_earlier(self) -> None:

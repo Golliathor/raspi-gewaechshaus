@@ -2,8 +2,19 @@
   "greenhouse_name": "Replay-Beispiel",
   "automation_enabled": true,
   "watering_enabled": true,
+  "weather": {
+    "enabled": false,
+    "provider": "open_meteo",
+    "latitude": null,
+    "longitude": null,
+    "forecast_horizon_hours": 6,
+    "refresh_seconds": 900,
+    "max_stale_seconds": 3600,
+    "request_timeout_seconds": 10,
+    "base_url": "https://api.open-meteo.com/v1/forecast"
+  },
   "controller": {
-    "active": "adaptive_local",
+    "active": "adaptive_weather",
     "history_size": 720
   },
   "controllers": {
@@ -39,6 +50,24 @@
       "watering_min_seconds": 5.0,
       "watering_max_seconds": 30.0,
       "watering_cooldown_seconds": 3600.0
+    },
+    "adaptive_weather": {
+      "weather_max_age_seconds": 3600.0,
+      "outdoor_temperature_difference_scale_c": 10.0,
+      "absolute_humidity_difference_scale_g_m3": 5.0,
+      "max_outdoor_temperature_adjustment_c": 1.5,
+      "max_outdoor_humidity_adjustment_percent": 5.0,
+      "outdoor_heat_reference_c": 28.0,
+      "outdoor_heat_scale_c": 8.0,
+      "rain_probability_threshold_percent": 60.0,
+      "rain_amount_reference_mm": 5.0,
+      "max_heat_soil_threshold_increase_percent": 2.0,
+      "max_rain_soil_threshold_reduction_percent": 2.0,
+      "max_heat_watering_increase": 0.3,
+      "max_rain_watering_reduction": 0.3,
+      "watering_multiplier_min": 0.7,
+      "watering_multiplier_max": 1.3,
+      "critical_soil_moisture_percent": 20.0
     },
     "legacy": {}
   }

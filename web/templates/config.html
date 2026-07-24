@@ -101,7 +101,7 @@
       </div>
 
       <div class="card">
-        <h2>Ansatz A: adaptive lokale Regelung</h2>
+        <h2>Gemeinsame lokale Basis für Ansatz A und B</h2>
         <h3>Abluft und Umluft</h3>
         <div class="grid">
           <div><label>Abluft Temperatur EIN (°C)</label><input name="adaptive_local_exhaust_temperature_on_c" type="number" step="0.1" value="{{ config.controllers.adaptive_local.exhaust_temperature_on_c }}"></div>
@@ -142,7 +142,48 @@
           <div><label>Max. Gießdauer (s)</label><input name="adaptive_local_watering_max_seconds" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_local.watering_max_seconds }}"></div>
           <div><label>Bewässerungs-Sperrzeit (s)</label><input name="adaptive_local_watering_cooldown_seconds" type="number" min="0" step="1" value="{{ config.controllers.adaptive_local.watering_cooldown_seconds }}"></div>
         </div>
-        <p>Wetterdaten werden in Ansatz A nicht verwendet. Alle Anpassungen erscheinen im Entscheidungslog.</p>
+        <p>Ansatz A ignoriert Wetterdaten. Ansatz B verwendet dieselben lokalen Parameter und ergänzt nur die folgenden Wetterkorrekturen.</p>
+      </div>
+
+      <div class="card">
+        <h2>Ansatz B: Wetterdaten</h2>
+        <p>Ohne gültige Wetterdaten arbeitet Ansatz B automatisch wie Ansatz A. Standortkoordinaten werden nur an den konfigurierten Wetteranbieter übertragen.</p>
+        <div class="grid">
+          <div>
+            <label><input type="checkbox" name="weather_enabled" {% if config.weather.enabled %}checked{% endif %}> Wetterabruf aktiv</label>
+            <label>Anbieter</label>
+            <select name="weather_provider">
+              <option value="open_meteo" {% if config.weather.provider == "open_meteo" %}selected{% endif %}>Open-Meteo</option>
+            </select>
+          </div>
+          <div><label>Breitengrad</label><input name="weather_latitude" type="number" min="-90" max="90" step="0.000001" value="{{ config.weather.latitude if config.weather.latitude is not none else '' }}"></div>
+          <div><label>Längengrad</label><input name="weather_longitude" type="number" min="-180" max="180" step="0.000001" value="{{ config.weather.longitude if config.weather.longitude is not none else '' }}"></div>
+          <div><label>Vorhersagehorizont (h)</label><input name="weather_forecast_horizon_hours" type="number" min="1" max="48" step="1" value="{{ config.weather.forecast_horizon_hours }}"></div>
+          <div><label>Abrufintervall (s)</label><input name="weather_refresh_seconds" type="number" min="1" step="1" value="{{ config.weather.refresh_seconds }}"></div>
+          <div><label>Cache maximal gültig (s)</label><input name="weather_max_stale_seconds" type="number" min="1" step="1" value="{{ config.weather.max_stale_seconds }}"></div>
+          <div><label>Netzwerk-Timeout (s)</label><input name="weather_request_timeout_seconds" type="number" min="0.1" step="0.1" value="{{ config.weather.request_timeout_seconds }}"></div>
+          <div><label>API-Basis-URL</label><input name="weather_base_url" type="text" value="{{ config.weather.base_url }}"></div>
+        </div>
+
+        <h3>Wetterkorrekturen</h3>
+        <div class="grid">
+          <div><label>Wetter maximal alt (s)</label><input name="adaptive_weather_weather_max_age_seconds" type="number" min="1" step="1" value="{{ config.controllers.adaptive_weather.weather_max_age_seconds }}"></div>
+          <div><label>Temperaturdifferenz-Skala (°C)</label><input name="adaptive_weather_outdoor_temperature_difference_scale_c" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_weather.outdoor_temperature_difference_scale_c }}"></div>
+          <div><label>Absolute-Feuchte-Skala (g/m³)</label><input name="adaptive_weather_absolute_humidity_difference_scale_g_m3" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_weather.absolute_humidity_difference_scale_g_m3 }}"></div>
+          <div><label>Max. Außentemperatur-Korrektur (°C)</label><input name="adaptive_weather_max_outdoor_temperature_adjustment_c" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_weather.max_outdoor_temperature_adjustment_c }}"></div>
+          <div><label>Max. Außenfeuchte-Korrektur (%)</label><input name="adaptive_weather_max_outdoor_humidity_adjustment_percent" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_weather.max_outdoor_humidity_adjustment_percent }}"></div>
+          <div><label>Außenhitze ab (°C)</label><input name="adaptive_weather_outdoor_heat_reference_c" type="number" step="0.1" value="{{ config.controllers.adaptive_weather.outdoor_heat_reference_c }}"></div>
+          <div><label>Außenhitze-Skala (°C)</label><input name="adaptive_weather_outdoor_heat_scale_c" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_weather.outdoor_heat_scale_c }}"></div>
+          <div><label>Regenwahrscheinlichkeit ab (%)</label><input name="adaptive_weather_rain_probability_threshold_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.adaptive_weather.rain_probability_threshold_percent }}"></div>
+          <div><label>Referenz-Regenmenge (mm)</label><input name="adaptive_weather_rain_amount_reference_mm" type="number" min="0.1" step="0.1" value="{{ config.controllers.adaptive_weather.rain_amount_reference_mm }}"></div>
+          <div><label>Max. Hitze-Grenzerhöhung (%)</label><input name="adaptive_weather_max_heat_soil_threshold_increase_percent" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_weather.max_heat_soil_threshold_increase_percent }}"></div>
+          <div><label>Max. Regen-Grenzabsenkung (%)</label><input name="adaptive_weather_max_rain_soil_threshold_reduction_percent" type="number" min="0" step="0.1" value="{{ config.controllers.adaptive_weather.max_rain_soil_threshold_reduction_percent }}"></div>
+          <div><label>Max. Hitze-Gießaufschlag</label><input name="adaptive_weather_max_heat_watering_increase" type="number" min="0" step="0.05" value="{{ config.controllers.adaptive_weather.max_heat_watering_increase }}"></div>
+          <div><label>Max. Regen-Gießreduktion</label><input name="adaptive_weather_max_rain_watering_reduction" type="number" min="0" step="0.05" value="{{ config.controllers.adaptive_weather.max_rain_watering_reduction }}"></div>
+          <div><label>Minimaler Gießmultiplikator</label><input name="adaptive_weather_watering_multiplier_min" type="number" min="0.1" max="1" step="0.05" value="{{ config.controllers.adaptive_weather.watering_multiplier_min }}"></div>
+          <div><label>Maximaler Gießmultiplikator</label><input name="adaptive_weather_watering_multiplier_max" type="number" min="1" step="0.05" value="{{ config.controllers.adaptive_weather.watering_multiplier_max }}"></div>
+          <div><label>Kritische Bodenfeuchte (%)</label><input name="adaptive_weather_critical_soil_moisture_percent" type="number" min="0" max="100" step="0.1" value="{{ config.controllers.adaptive_weather.critical_soil_moisture_percent }}"></div>
+        </div>
       </div>
 
       <div class="card">

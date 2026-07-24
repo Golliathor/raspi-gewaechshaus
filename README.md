@@ -8,10 +8,12 @@ vergleichbare Regelungsvarianten:
 3. adaptive Regelung mit lokaler Sensorik,
 4. adaptive Regelung mit lokaler Sensorik und Wetterdaten.
 
-Der Branch `model/adaptive-local` implementiert Ansatz A als
-`adaptive_local`. Der Regler ist vollständig regelbasiert, verwendet nur lokale
-Sensorik und protokolliert alle berechneten Trends und Anpassungen. Der
-`legacy`-Regler bleibt für Kompatibilitätstests verfügbar.
+Der Branch `model/adaptive-weather` implementiert Ansatz B als
+`adaptive_weather`. Er baut direkt auf `adaptive_local` auf, ergänzt
+Wetterkorrekturen und protokolliert jeden verwendeten Wetterwert, Score und
+Schwellwerteingriff. Ohne hinreichend aktuelle Wetterdaten verhält er sich
+deterministisch wie Ansatz A. Beide Controller sowie `legacy` bleiben für
+Vergleichs- und Kompatibilitätstests verfügbar.
 
 ## Ansatz A: adaptive lokale Regelung
 
@@ -57,6 +59,36 @@ erreichen und die 3600-Sekunden-Sperrzeit muss ablaufen. Dieser Zustand bleibt
 über Daemon-Neustarts erhalten. Wetterfelder werden ausdrücklich ignoriert;
 jedes Entscheidungslog enthält deshalb `weather_used=false`.
 
+## Ansatz B: lokale Regelung mit Wetterdaten
+
+Ansatz B verwendet exakt die lokalen Parameter von Ansatz A und ergänzt
+erklärbare Korrekturen:
+
+- Kühlere Außenluft senkt die Abluft-Temperaturgrenze, heißere Außenluft erhöht
+  sie. Die Standardkorrektur ist auf ±1,5 °C begrenzt.
+- Die aus Temperatur und relativer Feuchte berechnete absolute Luftfeuchte
+  entscheidet, ob Außenluft tatsächlich trockener ist. Geeignete Außenluft
+  senkt die Abluft-Feuchtegrenze, ungeeignete erhöht sie; die Korrektur ist auf
+  ±5 Prozentpunkte begrenzt.
+- Heiße Außenbedingungen erhöhen Bodenfeuchtegrenze und Gießdauer begrenzt.
+- Eine belastbare Regenprognose senkt den erwarteten Verdunstungsbedarf
+  moderat. Sie nimmt nicht an, dass Regen die Pflanzen im Gewächshaus direkt
+  erreicht. Bei kritischer Bodenfeuchte wird diese Reduktion vollständig
+  ignoriert.
+
+Die Hysterese wird nach jeder Wetterkorrektur erhalten. Wetterdaten, die älter
+als `weather_max_age_seconds` sind, fehlende Werte und Netzfehler führen zum
+lokalen Fallback. Liveabrufe werden gecacht; ein alter Cache wird nach
+`weather.max_stale_seconds` nicht mehr verwendet.
+
+Der mitgelieferte Anbieter ist Open-Meteo. Er liefert aktuelle
+Außentemperatur/-feuchte sowie stündlichen Niederschlag und
+Niederschlagswahrscheinlichkeit. Der Daemon verdichtet die Niederschlagswerte
+über `weather.forecast_horizon_hours` in den bereits gemeinsamen kanonischen
+`WeatherSnapshot`; das Snapshot- und Entscheidungsformat bleibt damit zwischen
+allen Modellbranches identisch.
+API-Dokumentation: <https://open-meteo.com/en/docs>
+
 ## Architektur
 
 - `greenhouse.models`: Sensor-, Wetter-, Kontext- und Entscheidungstypen
@@ -65,6 +97,8 @@ jedes Entscheidungslog enthält deshalb `weather_used=false`.
 - `greenhouse.runtime`: deterministische Engine für Livebetrieb und Replay
 - `greenhouse.records`, `greenhouse.replay`, `greenhouse.metrics`: einheitliche
   Versuchslogs und Auswertung
+- `greenhouse.weather`: Open-Meteo-Client, zeitbegrenzter Cache und
+  serialisierbarer Wetterzustand
 - `web/automation_daemon.py`: Raspberry-Pi-Orchestrierung und Hardwareadapter
 
 Ein Controller bekommt einen `SensorSnapshot`, den `ControlContext` und die
@@ -108,7 +142,7 @@ Ein deterministischer Dry-Run mit dem mitgelieferten Fixture:
 
 ```bash
 python -m greenhouse.replay \
-  --controller adaptive_local \
+  --controller adaptive_weather \
   --config examples/config.json \
   --input tests/fixtures/replay_snapshots.csv \
   --run-id smoke-test \
@@ -134,7 +168,16 @@ Die Auswahl für Livebetrieb und Dashboard erfolgt über:
 
 ```json
 {
-  "controller": {"active": "adaptive_local", "history_size": 720},
+  "controller": {"active": "adaptive_weather", "history_size": 720},
+  "weather": {
+    "enabled": true,
+    "provider": "open_meteo",
+    "latitude": 52.52,
+    "longitude": 13.405,
+    "forecast_horizon_hours": 6,
+    "refresh_seconds": 900,
+    "max_stale_seconds": 3600
+  },
   "controllers": {
     "adaptive_local": {
       "trend_window_seconds": 900,
@@ -146,6 +189,13 @@ Die Auswahl für Livebetrieb und Dashboard erfolgt über:
       "watering_min_seconds": 5,
       "watering_max_seconds": 30,
       "watering_cooldown_seconds": 3600
+    },
+    "adaptive_weather": {
+      "weather_max_age_seconds": 3600,
+      "max_outdoor_temperature_adjustment_c": 1.5,
+      "max_outdoor_humidity_adjustment_percent": 5,
+      "rain_probability_threshold_percent": 60,
+      "critical_soil_moisture_percent": 20
     }
   }
 }
@@ -173,9 +223,11 @@ Vor dem ersten Livebetrieb:
 1. `GREENHOUSE_BASE_DIR` und `GREENHOUSE_RUN_ID` setzen.
 2. `python -m unittest discover -v` ausführen.
 3. ADC-Adresse und Sensorkanäle auf der Konfigurationsseite prüfen.
-4. Automatik zunächst deaktivieren und alle drei Relais einzeln über das
+4. Für Ansatz B Wetterabruf, Breiten- und Längengrad konfigurieren und im
+   Status `weather_available` sowie mögliche Abruffehler prüfen.
+5. Automatik zunächst deaktivieren und alle drei Relais einzeln über das
    Dashboard prüfen.
-5. Automatik aktivieren und `control_snapshots.csv`,
+6. Automatik aktivieren und `control_snapshots.csv`,
    `control_decisions.csv` sowie Safety-Ereignisse in `actions.csv`
    kontrollieren.
 

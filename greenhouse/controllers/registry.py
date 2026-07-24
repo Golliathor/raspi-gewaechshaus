@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from greenhouse.controllers.base import Controller
 from greenhouse.controllers.adaptive_local import AdaptiveLocalController
+from greenhouse.controllers.adaptive_weather import AdaptiveWeatherController
 from greenhouse.controllers.legacy import LegacyController
 
 
 _CONTROLLERS = {
     AdaptiveLocalController.controller_id: AdaptiveLocalController,
+    AdaptiveWeatherController.controller_id: AdaptiveWeatherController,
     LegacyController.controller_id: LegacyController,
 }
 

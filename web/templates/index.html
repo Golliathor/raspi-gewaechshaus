@@ -78,7 +78,9 @@
         <div class="meta">
           Versuch: <span id="runId">{{ state.run_id or "-" }}</span><br>
           Entscheidung: <span id="decisionReasons">{{ (state.last_decision_reasons or [])|join(", ") or "-" }}</span><br>
-          Safety: <span id="safetyOverrides">{{ (state.last_safety_overrides or [])|join(", ") or "-" }}</span>
+          Safety: <span id="safetyOverrides">{{ (state.last_safety_overrides or [])|join(", ") or "-" }}</span><br>
+          Wetter: <span id="weatherStatus">{{ "verfügbar" if state.weather_available else "lokaler Fallback" }}</span><br>
+          Außenwerte: <span id="weatherValues">{% if state.weather_available %}{{ state.weather.outside_temperature_c or "-" }} °C / {{ state.weather.outside_humidity_percent or "-" }} %{% else %}-{% endif %}</span>
         </div>
       </div>
     </div>
@@ -308,6 +310,15 @@ function makeChart(labels, temps, hums) {
         (data.last_decision_reasons || []).join(", ") || "-";
       document.getElementById("safetyOverrides").textContent =
         (data.last_safety_overrides || []).join(", ") || "-";
+      const weather = data.weather || {};
+      document.getElementById("weatherStatus").textContent =
+        data.weather_available
+          ? `verfügbar (${weather.provider || "unbekannt"})`
+          : (data.last_weather_error ? `lokaler Fallback: ${data.last_weather_error}` : "lokaler Fallback");
+      document.getElementById("weatherValues").textContent =
+        data.weather_available
+          ? `${weather.outside_temperature_c ?? "-"} °C / ${weather.outside_humidity_percent ?? "-"} %`
+          : "-";
 
       renderSensors(data.soil_sensors || []);
       

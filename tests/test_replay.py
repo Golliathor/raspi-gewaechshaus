@@ -5,10 +5,13 @@ import csv
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from greenhouse.config import DEFAULT_CONFIG
 from greenhouse.importer import import_legacy_logs
+from greenhouse.models import SensorSnapshot, WeatherSnapshot
+from greenhouse.records import write_snapshots
 from greenhouse.replay import run_replay
 
 
@@ -16,6 +19,59 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_snapshots.csv"
 
 
 class ReplayTests(unittest.TestCase):
+    def test_adaptive_weather_replay_is_deterministic_and_uses_weather(self) -> None:
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        start = datetime(2026, 7, 24, 12)
+        snapshots = [
+            SensorSnapshot(
+                start + timedelta(minutes=index * 5),
+                27,
+                45,
+                (40, None, None),
+                0,
+                weather=WeatherSnapshot(
+                    start + timedelta(minutes=index * 5),
+                    outside_temperature_c=17,
+                    outside_humidity_percent=20,
+                    precipitation_mm=0,
+                    precipitation_probability_percent=0,
+                    provider="fixture",
+                ),
+            )
+            for index in range(2)
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "weather.csv"
+            first = root / "first"
+            second = root / "second"
+            write_snapshots(fixture, snapshots)
+            results, _ = run_replay(
+                fixture,
+                first,
+                controller_id="adaptive_weather",
+                config=config,
+                run_id="weather-test",
+            )
+            run_replay(
+                fixture,
+                second,
+                controller_id="adaptive_weather",
+                config=config,
+                run_id="weather-test",
+            )
+            self.assertEqual(
+                (first / "decisions.csv").read_bytes(),
+                (second / "decisions.csv").read_bytes(),
+            )
+            self.assertEqual(
+                (first / "metrics.json").read_bytes(),
+                (second / "metrics.json").read_bytes(),
+            )
+
+        self.assertTrue(results[0].requested.exhaust)
+        self.assertTrue(results[0].requested.diagnostics["weather_used"])
+
     def test_adaptive_local_replay_uses_shared_output_contract(self) -> None:
         config = copy.deepcopy(DEFAULT_CONFIG)
         with tempfile.TemporaryDirectory() as directory:

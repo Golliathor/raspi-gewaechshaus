@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import sys
 import time
@@ -16,9 +17,15 @@ from greenhouse.calibration import light_class, raw_to_light_percent, raw_to_per
 from greenhouse.config import ProjectPaths, load_config, load_json, save_json
 from greenhouse.controllers import create_controller
 from greenhouse.hardware import ADS1115Reader, RaspberryPiRelayOutput
-from greenhouse.models import ActuatorState, SensorSnapshot
+from greenhouse.models import ActuatorState, SensorSnapshot, WeatherSnapshot
 from greenhouse.records import append_decision, append_snapshot
 from greenhouse.runtime import ControlEngine
+from greenhouse.weather import (
+    CachedWeatherProvider,
+    OpenMeteoWeatherClient,
+    weather_from_mapping,
+    weather_to_mapping,
+)
 
 
 PATHS = ProjectPaths.from_env()
@@ -210,6 +217,7 @@ def build_snapshot(
     soil_sensors: list[dict[str, Any]],
     light_sensor: dict[str, Any],
     sensor_timestamp: datetime | None,
+    weather: WeatherSnapshot | None = None,
 ) -> SensorSnapshot:
     observed_times = [
         value
@@ -232,6 +240,41 @@ def build_snapshot(
         light_percent=light_sensor.get("light_percent"),
         quality="ok" if not issues else "invalid",
         issues=tuple(issues),
+        weather=weather,
+    )
+
+
+def build_weather_service(
+    config: dict[str, Any],
+    cached_snapshot: WeatherSnapshot | None = None,
+) -> CachedWeatherProvider | None:
+    weather_config = config.get("weather", {})
+    if not weather_config.get("enabled", False):
+        return None
+    if weather_config.get("provider", "open_meteo") != "open_meteo":
+        return None
+    client = OpenMeteoWeatherClient(
+        latitude=float(weather_config["latitude"]),
+        longitude=float(weather_config["longitude"]),
+        forecast_horizon_hours=int(
+            weather_config.get("forecast_horizon_hours", 6)
+        ),
+        timeout_seconds=float(
+            weather_config.get("request_timeout_seconds", 10)
+        ),
+        base_url=str(
+            weather_config.get(
+                "base_url", "https://api.open-meteo.com/v1/forecast"
+            )
+        ),
+    )
+    return CachedWeatherProvider(
+        client,
+        refresh_seconds=float(weather_config.get("refresh_seconds", 900)),
+        max_stale_seconds=float(
+            weather_config.get("max_stale_seconds", 3600)
+        ),
+        cached_snapshot=cached_snapshot,
     )
 
 
@@ -358,6 +401,10 @@ def main() -> None:
     sensor_timestamp: datetime | None = None
     soil_sensors = state.get("soil_sensors", [])
     light_sensor = state.get("light_sensor", {})
+    latest_weather = weather_from_mapping(state.get("weather"))
+    weather_service: CachedWeatherProvider | None = None
+    weather_signature: str | None = None
+    last_weather_error: str | None = state.get("last_weather_error")
 
     try:
         while True:
@@ -378,6 +425,25 @@ def main() -> None:
                 engine.config = config
 
             config, state = handle_command(config, state, engine, now)
+            current_weather_signature = json.dumps(
+                config.get("weather", {}),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if current_weather_signature != weather_signature:
+                weather_service = build_weather_service(config, latest_weather)
+                weather_signature = current_weather_signature
+            weather_error = None
+            if weather_service is not None:
+                latest_weather, weather_error = weather_service.get(now)
+            else:
+                latest_weather = None
+            if weather_error and weather_error != last_weather_error:
+                log_action("weather_fetch_failed", weather_error)
+            elif last_weather_error and not weather_error:
+                log_action("weather_fetch_recovered")
+            last_weather_error = weather_error
+
             sensor_interval = float(config.get("sensor_read_interval_seconds", 30))
             if (
                 last_sensor_read_at is None
@@ -395,6 +461,7 @@ def main() -> None:
                 soil_sensors,
                 light_sensor,
                 sensor_timestamp,
+                latest_weather,
             )
             watering_interval = float(
                 config.get("watering_check_interval_seconds", 300)
@@ -425,6 +492,9 @@ def main() -> None:
                     "relays": result.state.as_dict(),
                     "soil_sensors": soil_sensors,
                     "light_sensor": light_sensor,
+                    "weather": weather_to_mapping(latest_weather),
+                    "weather_available": latest_weather is not None,
+                    "last_weather_error": weather_error,
                     "climate": serialize_climate(climate),
                     "automation_active": bool(
                         config.get("automation_enabled", True)
