@@ -519,7 +519,7 @@
       <div class="camera-layout">
         <div>
           <div class="section-head">
-            <div><h2 id="cameraHeading">Kamerabild</h2><p>Letzte Aufnahme: {{ state.last_image_time or "–" }}</p></div>
+            <div><h2 id="cameraHeading">Kamerabild</h2><p>Letzte Aufnahme: <span id="lastImageTime">{{ state.last_image_time or "–" }}</span></p></div>
           </div>
           <button type="button" onclick="loadLatestImage()">Bild laden / aktualisieren</button>
         </div>
@@ -1009,6 +1009,7 @@
         document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "–";
         document.getElementById("lastWateringAt").textContent = data.last_watering_at || "–";
         document.getElementById("lastWateringReason").textContent = REASON_LABELS[data.last_watering_reason] || data.last_watering_reason || "–";
+        document.getElementById("lastImageTime").textContent = data.last_image_time || "–";
         renderReasons(data.last_decision_reasons);
         renderSafety(data.last_safety_overrides);
         renderDiagnostics(data.last_decision_diagnostics);
