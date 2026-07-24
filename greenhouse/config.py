@@ -1,0 +1,277 @@
+from __future__ import annotations
+
+import copy
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+
+DEFAULT_BASE_DIR = Path("/home/grow/gewaechshaus")
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    "greenhouse_name": "Raspi-Gewächshaus",
+    "automation_enabled": True,
+    "watering_enabled": True,
+    "exhaust_temp_on_c": 28.0,
+    "exhaust_temp_off_c": 25.0,
+    "exhaust_humidity_on": 50.0,
+    "exhaust_humidity_off": 40.0,
+    "exhaust_min_temp_c": 18.0,
+    "circulation_temp_on_c": 24.0,
+    "circulation_temp_off_c": 22.0,
+    "circulation_humidity_on": 45.0,
+    "circulation_humidity_off": 38.0,
+    "watering_seconds": 10,
+    "watering_fallback_seconds": 40,
+    "water_flow_ml_per_second": 25.0,
+    "timelapse_morning": "08:00",
+    "timelapse_noon": "13:00",
+    "timelapse_evening": "19:00",
+    "refresh_seconds": 15,
+    "chart_refresh_seconds": 60,
+    "chart_points": 200,
+    "daily_summary_days": 14,
+    "daily_summary_cache_max_age_seconds": 300,
+    "daily_summary_row_safety_factor": 2,
+    "adc_enabled": True,
+    "adc_type": "ADS1115",
+    "adc_address": 72,
+    "sensor_read_interval_seconds": 30,
+    "watering_check_interval_seconds": 300,
+    "control_loop_interval_seconds": 5,
+    "light_sensor": {
+        "name": "Lichtsensor",
+        "enabled": True,
+        "channel": 3,
+        "calibration_raw_dark": 26000,
+        "calibration_raw_bright": 2000,
+    },
+    "soil_sensors": [
+        {
+            "name": "Sensor 1",
+            "enabled": True,
+            "channel": 0,
+            "dry_below_percent": 35,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000,
+        },
+        {
+            "name": "Sensor 2",
+            "enabled": False,
+            "channel": 1,
+            "dry_below_percent": 35,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000,
+        },
+        {
+            "name": "Sensor 3",
+            "enabled": False,
+            "channel": 2,
+            "dry_below_percent": 35,
+            "calibration_raw_dry": 26000,
+            "calibration_raw_wet": 12000,
+        },
+    ],
+    "camera_enabled": True,
+    "camera_image_dir": "images",
+    "camera_filename_pattern": "%Y-%m-%d_%H-%M-%S.jpg",
+    "camera_width": 1920,
+    "camera_height": 1080,
+    "camera_quality": 93,
+    "camera_rotation": 0,
+    "camera_hflip": False,
+    "camera_vflip": False,
+    "camera_timeout_ms": 1000,
+    "controller": {
+        "active": "legacy",
+        "history_size": 120,
+    },
+    "controllers": {
+        "legacy": {},
+    },
+    "safety": {
+        "max_watering_pulse_seconds": 60,
+        "max_daily_watering_seconds": 180,
+        "sensor_stale_after_seconds": 180,
+        "safe_state_after_seconds": 600,
+    },
+    "targets": {
+        "temperature_min_c": 18.0,
+        "temperature_max_c": 28.0,
+        "humidity_min_percent": 40.0,
+        "humidity_max_percent": 70.0,
+        "soil_moisture_min_percent": 35.0,
+        "soil_moisture_max_percent": 70.0,
+    },
+}
+
+
+@dataclass(frozen=True)
+class ProjectPaths:
+    base_dir: Path
+
+    @classmethod
+    def from_env(cls, base_dir: str | os.PathLike[str] | None = None) -> "ProjectPaths":
+        configured = base_dir or os.environ.get("GREENHOUSE_BASE_DIR")
+        return cls(Path(configured).expanduser() if configured else DEFAULT_BASE_DIR)
+
+    @property
+    def web_dir(self) -> Path:
+        return self.base_dir / "web"
+
+    @property
+    def logs_dir(self) -> Path:
+        return self.base_dir / "logs"
+
+    @property
+    def images_dir(self) -> Path:
+        return self.base_dir / "images"
+
+    @property
+    def config_path(self) -> Path:
+        return self.web_dir / "config.json"
+
+    @property
+    def state_path(self) -> Path:
+        return self.web_dir / "state.json"
+
+    @property
+    def command_path(self) -> Path:
+        return self.web_dir / "command.json"
+
+    @property
+    def climate_csv_path(self) -> Path:
+        return self.logs_dir / "klima.csv"
+
+    @property
+    def sensor_csv_path(self) -> Path:
+        return self.logs_dir / "sensoren.csv"
+
+    @property
+    def action_log_path(self) -> Path:
+        return self.logs_dir / "actions.csv"
+
+    @property
+    def snapshot_log_path(self) -> Path:
+        return self.logs_dir / "control_snapshots.csv"
+
+    @property
+    def decision_log_path(self) -> Path:
+        return self.logs_dir / "control_decisions.csv"
+
+    def resolve_configured_path(self, value: str | os.PathLike[str]) -> Path:
+        path = Path(value).expanduser()
+        return path if path.is_absolute() else self.base_dir / path
+
+
+def _deep_merge(defaults: Any, overrides: Any) -> Any:
+    if isinstance(defaults, dict) and isinstance(overrides, Mapping):
+        result = copy.deepcopy(defaults)
+        for key, value in overrides.items():
+            if key in result:
+                result[key] = _deep_merge(result[key], value)
+            else:
+                result[key] = copy.deepcopy(value)
+        return result
+    if isinstance(defaults, list) and isinstance(overrides, list):
+        result = copy.deepcopy(defaults)
+        for index, value in enumerate(overrides[: len(result)]):
+            result[index] = _deep_merge(result[index], value)
+        return result
+    return copy.deepcopy(overrides)
+
+
+def validate_config(config: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+
+    positive_numbers = (
+        "watering_seconds",
+        "water_flow_ml_per_second",
+        "sensor_read_interval_seconds",
+        "watering_check_interval_seconds",
+        "control_loop_interval_seconds",
+    )
+    for key in positive_numbers:
+        try:
+            if float(config[key]) <= 0:
+                errors.append(f"{key} muss größer als 0 sein")
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"{key} muss eine Zahl sein")
+
+    controller_id = config.get("controller", {}).get("active")
+    if not isinstance(controller_id, str) or not controller_id:
+        errors.append("controller.active muss gesetzt sein")
+
+    safety = config.get("safety", {})
+    try:
+        stale = float(safety["sensor_stale_after_seconds"])
+        safe = float(safety["safe_state_after_seconds"])
+        maximum_pulse = float(safety["max_watering_pulse_seconds"])
+        daily_limit = float(safety["max_daily_watering_seconds"])
+        if stale <= 0 or safe < stale:
+            errors.append(
+                "safety.safe_state_after_seconds muss mindestens "
+                "sensor_stale_after_seconds entsprechen"
+            )
+        if maximum_pulse <= 0 or daily_limit < maximum_pulse:
+            errors.append(
+                "Das tägliche Bewässerungslimit muss mindestens einem "
+                "maximalen Wasserimpuls entsprechen"
+            )
+    except (KeyError, TypeError, ValueError):
+        errors.append("Safety-Zeitgrenzen müssen Zahlen sein")
+
+    targets = config.get("targets", {})
+    for minimum_key, maximum_key in (
+        ("temperature_min_c", "temperature_max_c"),
+        ("humidity_min_percent", "humidity_max_percent"),
+        ("soil_moisture_min_percent", "soil_moisture_max_percent"),
+    ):
+        try:
+            if float(targets[minimum_key]) >= float(targets[maximum_key]):
+                errors.append(f"targets.{minimum_key} muss unter {maximum_key} liegen")
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"targets.{minimum_key}/{maximum_key} müssen Zahlen sein")
+
+    for index, sensor in enumerate(config.get("soil_sensors", [])):
+        channel = sensor.get("channel")
+        if channel not in (0, 1, 2, 3):
+            errors.append(f"soil_sensors[{index}].channel muss zwischen 0 und 3 liegen")
+
+    return errors
+
+
+def load_json(path: Path, default: Any = None) -> Any:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return copy.deepcopy(default)
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    with temporary_path.open("w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2, ensure_ascii=False, sort_keys=True)
+    temporary_path.replace(path)
+
+
+def load_config(path: Path | None = None, *, validate: bool = False) -> dict[str, Any]:
+    config_path = path or ProjectPaths.from_env().config_path
+    overrides = load_json(config_path, {})
+    config = _deep_merge(DEFAULT_CONFIG, overrides if isinstance(overrides, dict) else {})
+    if validate:
+        errors = validate_config(config)
+        if errors:
+            raise ValueError("; ".join(errors))
+    return config
+
+
+def ensure_config(path: Path | None = None) -> dict[str, Any]:
+    config_path = path or ProjectPaths.from_env().config_path
+    if not config_path.exists():
+        save_json(config_path, DEFAULT_CONFIG)
+    return load_config(config_path)

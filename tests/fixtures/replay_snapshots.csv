@@ -1,0 +1,4 @@
+timestamp,temperature_c,humidity_percent,soil1_percent,soil2_percent,soil3_percent,light_percent,quality,issues,weather_timestamp,outside_temperature_c,outside_humidity_percent,precipitation_mm,precipitation_probability_percent,weather_provider
+2026-07-24T12:00:00,30,60,20,,,80,ok,,,,,,,
+2026-07-24T12:05:00,27,55,40,,,70,ok,,,,,,,
+2026-07-24T12:10:00,24,38,45,,,60,ok,,,,,,,

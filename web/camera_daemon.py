@@ -1,36 +1,25 @@
 import json
 import os
 import subprocess
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
-BASE_DIR = "/home/grow/gewaechshaus/web"
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-STATE_PATH = os.path.join(BASE_DIR, "state.json")
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
-IMAGE_DIR = "/home/grow/gewaechshaus/images"
-LATEST_IMAGE_PATH = os.path.join(IMAGE_DIR, "latest.jpg")
+from greenhouse.config import ProjectPaths, load_config as load_project_config
+
+
+PATHS = ProjectPaths.from_env()
+CONFIG_PATH = str(PATHS.config_path)
+STATE_PATH = str(PATHS.state_path)
+IMAGE_DIR = str(PATHS.images_dir)
+LATEST_IMAGE_PATH = str(PATHS.images_dir / "latest.jpg")
 
 LOOP_INTERVAL = 20  # Sekunden
-
-DEFAULT_CONFIG = {
-    "camera_enabled": True,
-    "camera_image_dir": IMAGE_DIR,
-    "camera_filename_pattern": "%Y-%m-%d_%H-%M-%S.jpg",
-
-    "timelapse_morning": "08:00",
-    "timelapse_noon": "13:00",
-    "timelapse_evening": "19:00",
-
-    "camera_width": 1920,
-    "camera_height": 1080,
-    "camera_quality": 93,
-    "camera_rotation": 0,
-    "camera_hflip": False,
-    "camera_vflip": False,
-    "camera_timeout_ms": 1000
-}
-
 
 def load_json(path, default=None):
     try:
@@ -48,10 +37,7 @@ def save_json(path, data):
 
 
 def load_config():
-    cfg = load_json(CONFIG_PATH, {})
-    merged = DEFAULT_CONFIG.copy()
-    merged.update(cfg)
-    return merged
+    return load_project_config(Path(CONFIG_PATH))
 
 
 def load_state():
@@ -63,7 +49,9 @@ def save_state(state):
 
 
 def ensure_dirs(config):
-    image_dir = config.get("camera_image_dir", IMAGE_DIR)
+    image_dir = str(
+        PATHS.resolve_configured_path(config.get("camera_image_dir", "images"))
+    )
     os.makedirs(image_dir, exist_ok=True)
 
 
@@ -91,7 +79,9 @@ def build_capture_command(output_path, config):
 
 
 def capture_image(config):
-    image_dir = config.get("camera_image_dir", IMAGE_DIR)
+    image_dir = str(
+        PATHS.resolve_configured_path(config.get("camera_image_dir", "images"))
+    )
     filename_pattern = config.get("camera_filename_pattern", "%Y-%m-%d_%H-%M-%S.jpg")
     now = datetime.now()
 

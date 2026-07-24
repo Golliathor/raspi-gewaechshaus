@@ -29,6 +29,11 @@
   </header>
 
   <main>
+    {% if config_error %}
+    <div class="card" style="border:1px solid #b91c1c;color:#991b1b;">
+      Konfiguration nicht gespeichert: {{ config_error }}
+    </div>
+    {% endif %}
     <form method="post">
       <div class="card">
         <h2>Allgemein</h2>
@@ -86,7 +91,7 @@
         <div style="margin-top:12px;">
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
-          <label><input type="checkbox" name="pcf8591_enabled" {% if config.pcf8591_enabled %}checked{% endif %}> ADS1115 aktiv</label>
+          <div>Aktiver Controller: <strong>{{ config.controller.active }}</strong></div>
         </div>
       </div>
 
@@ -132,7 +137,7 @@
       </div>
 
       <div class="card">
-        <h2>PCF8591</h2>
+        <h2>ADS1115</h2>
         <div class="grid">
           <div>
             <label>
@@ -140,7 +145,7 @@
                 ADS1115 aktiv
             </label>
             <label>I2C-Adresse ADS1115 (dezimal, 0x48 = 72)</label>
-            <input name="pcf8591_address" type="number" value="{{ config.pcf8591_address }}">
+            <input name="adc_address" type="number" value="{{ config.adc_address }}">
           </div>
         </div>
 
@@ -192,6 +197,22 @@
       <label>Rohwert hell</label>
       <input name="light_sensor_calibration_raw_bright" type="number" value="{{ config.light_sensor.calibration_raw_bright }}">
       </div>
+      </div>
+
+      <div class="card">
+        <h2>Sicherheit und Zielbereiche</h2>
+        <div class="grid">
+          <div><label>Maximaler Wasserimpuls (s)</label><input name="safety_max_watering_pulse_seconds" type="number" step="0.1" value="{{ config.safety.max_watering_pulse_seconds }}"></div>
+          <div><label>Maximale Bewässerung pro Tag (s)</label><input name="safety_max_daily_watering_seconds" type="number" step="0.1" value="{{ config.safety.max_daily_watering_seconds }}"></div>
+          <div><label>Sensor gilt als veraltet nach (s)</label><input name="safety_sensor_stale_after_seconds" type="number" step="1" value="{{ config.safety.sensor_stale_after_seconds }}"></div>
+          <div><label>Sicherer Aus-Zustand nach (s)</label><input name="safety_safe_state_after_seconds" type="number" step="1" value="{{ config.safety.safe_state_after_seconds }}"></div>
+          <div><label>Temperatur Ziel min. (°C)</label><input name="targets_temperature_min_c" type="number" step="0.1" value="{{ config.targets.temperature_min_c }}"></div>
+          <div><label>Temperatur Ziel max. (°C)</label><input name="targets_temperature_max_c" type="number" step="0.1" value="{{ config.targets.temperature_max_c }}"></div>
+          <div><label>Luftfeuchte Ziel min. (%)</label><input name="targets_humidity_min_percent" type="number" step="0.1" value="{{ config.targets.humidity_min_percent }}"></div>
+          <div><label>Luftfeuchte Ziel max. (%)</label><input name="targets_humidity_max_percent" type="number" step="0.1" value="{{ config.targets.humidity_max_percent }}"></div>
+          <div><label>Bodenfeuchte Ziel min. (%)</label><input name="targets_soil_moisture_min_percent" type="number" step="0.1" value="{{ config.targets.soil_moisture_min_percent }}"></div>
+          <div><label>Bodenfeuchte Ziel max. (%)</label><input name="targets_soil_moisture_max_percent" type="number" step="0.1" value="{{ config.targets.soil_moisture_max_percent }}"></div>
+        </div>
       </div>
 
       <div class="card">

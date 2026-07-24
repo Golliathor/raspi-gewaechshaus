@@ -1,6 +1,7 @@
 # Virtual env
 .venv/
 venv/
+env/
 
 # Python
 __pycache__/
@@ -20,17 +21,8 @@ images/
 web/state.json
 
 # Config (optional)
-web/config.json.venv/
-venv/
-env/
+web/config.json
 
-__pycache__/
-*.pyc
-
-logs/
-*.csv
-
-*.png
-*.jpg
-
-config.json
+# Versionierte Test- und Beispieldateien
+!tests/fixtures/*.csv
+!examples/config.json

@@ -1,17 +1,20 @@
 import csv
 import time
 from datetime import datetime
-from pathlib import Path
 
 import board
 import adafruit_dht
 
-CSV_PATH = Path("/home/grow/gewaechshaus/logs/klima.csv")
+from greenhouse.config import ProjectPaths
+
+
+CSV_PATH = ProjectPaths.from_env().climate_csv_path
 MESSINTERVALL = 60  # Sekunden
 
 dht = adafruit_dht.DHT22(board.D4)
 
 # CSV-Datei mit Header anlegen, falls sie noch nicht existiert
+CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
 if not CSV_PATH.exists():
     with open(CSV_PATH, "w", newline="") as f:
         writer = csv.writer(f)

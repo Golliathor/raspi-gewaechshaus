@@ -72,6 +72,15 @@
           <button class="secondary" onclick="toggleAutomation(false)">AUS</button>
         </div>
       </div>
+      <div class="card">
+        <div class="muted">Regelung</div>
+        <div class="value" style="font-size:1.2rem;" id="controllerId">{{ state.active_controller or config.controller.active }}</div>
+        <div class="meta">
+          Versuch: <span id="runId">{{ state.run_id or "-" }}</span><br>
+          Entscheidung: <span id="decisionReasons">{{ (state.last_decision_reasons or [])|join(", ") or "-" }}</span><br>
+          Safety: <span id="safetyOverrides">{{ (state.last_safety_overrides or [])|join(", ") or "-" }}</span>
+        </div>
+      </div>
     </div>
 
     <div class="card chart-card">
@@ -293,6 +302,12 @@ function makeChart(labels, temps, hums) {
       document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "-";
       document.getElementById("lastWateringAt").textContent = data.last_watering_at || "-";
       document.getElementById("lastWateringReason").textContent = data.last_watering_reason || "-";
+      document.getElementById("controllerId").textContent = data.active_controller || "-";
+      document.getElementById("runId").textContent = data.run_id || "-";
+      document.getElementById("decisionReasons").textContent =
+        (data.last_decision_reasons || []).join(", ") || "-";
+      document.getElementById("safetyOverrides").textContent =
+        (data.last_safety_overrides || []).join(", ") || "-";
 
       renderSensors(data.soil_sensors || []);
       

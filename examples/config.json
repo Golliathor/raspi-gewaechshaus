@@ -1,0 +1,12 @@
+{
+  "greenhouse_name": "Replay-Beispiel",
+  "automation_enabled": true,
+  "watering_enabled": true,
+  "controller": {
+    "active": "legacy",
+    "history_size": 120
+  },
+  "controllers": {
+    "legacy": {}
+  }
+}

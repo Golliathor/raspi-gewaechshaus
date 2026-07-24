@@ -2,13 +2,27 @@ import csv
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import zipfile
 from datetime import datetime
 from collections import deque
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
 from flask import Flask, jsonify, render_template, request, redirect, url_for, send_file, after_this_request
 from flask_compress import Compress
+
+from greenhouse.config import (
+    DEFAULT_CONFIG,
+    ProjectPaths,
+    ensure_config as ensure_project_config,
+    load_config as load_project_config,
+    validate_config,
+)
 
 app = Flask(__name__)
 
@@ -21,93 +35,18 @@ app.config["COMPRESS_MIMETYPES"] = [
 app.config["COMPRESS_LEVEL"] = 6
 Compress(app)
 
-BASE_DIR = "/home/grow/gewaechshaus/web"
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-STATE_PATH = os.path.join(BASE_DIR, "state.json")
-COMMAND_PATH = os.path.join(BASE_DIR, "command.json")
-CSV_PATH = "/home/grow/gewaechshaus/logs/klima.csv"
-LOG_DIR = "/home/grow/gewaechshaus/logs"
-SENSOR_CSV_PATH = "/home/grow/gewaechshaus/logs/sensoren.csv"
-TEST_IMAGE_PATH = "/home/grow/gewaechshaus/images/test_capture.jpg"
-CONFIG_LOG_PATH = "/home/grow/gewaechshaus/logs/config_aenderungen.csv"
-ACTION_LOG_PATH = "/home/grow/gewaechshaus/logs/actions.csv"
-DAILY_SUMMARY_JSON_PATH = "/home/grow/gewaechshaus/logs/daily_summary.json"
-
-DEFAULT_CONFIG = {
-    "greenhouse_name": "Raspi-Gewächshaus",
-    "exhaust_temp_on_c": 28.0,
-    "exhaust_temp_off_c": 25.0,
-    "exhaust_humidity_on": 50.0,
-    "exhaust_humidity_off": 40.0,
-    "exhaust_min_temp_c": 18.0,
-    "circulation_temp_on_c": 24.0,
-    "circulation_temp_off_c": 22.0,
-    "circulation_humidity_on": 45.0,
-    "circulation_humidity_off": 38.0,
-    "automation_enabled": True,
-    "watering_enabled": True,
-    "watering_seconds": 10,
-    "watering_fallback_seconds": 40,
-    "water_flow_ml_per_second": 25,
-    "timelapse_morning": "08:00",
-    "timelapse_noon": "13:00",
-    "timelapse_evening": "19:00",
-    "refresh_seconds": 15,
-    "chart_refresh_seconds": 60,
-    "chart_points": 200,
-    "daily_summary_days": 14,
-    "daily_summary_cache_max_age_seconds": 300,
-    "daily_summary_row_safety_factor": 2,
-    "adc_enabled": True,
-    "adc_type": "ADS1115",
-    "adc_address": 72,
-    "sensor_read_interval_seconds": 30,
-    "watering_check_interval_seconds": 300,
-    "light_sensor": {
-        "name": "Lichtsensor",
-        "enabled": True,
-        "channel": 3,
-        "calibration_raw_dark": 26000,
-        "calibration_raw_bright": 2000,
-    },
-    "soil_sensors": [
-        {
-            "name": "Sensor 1",
-            "enabled": True,
-            "channel": 0,
-            "dry_below_percent": 35,
-            "calibration_raw_dry": 26000,
-            "calibration_raw_wet": 12000,
-        },
-        {
-            "name": "Sensor 2",
-            "enabled": False,
-            "channel": 1,
-            "dry_below_percent": 35,
-            "calibration_raw_dry": 26000,
-            "calibration_raw_wet": 12000,
-        },
-        {
-            "name": "Sensor 3",
-            "enabled": False,
-            "channel": 2,
-            "dry_below_percent": 35,
-            "calibration_raw_dry": 26000,
-            "calibration_raw_wet": 12000,
-        },
-    ],
-    "camera_enabled": True,
-    "camera_image_dir": "/home/grow/gewaechshaus/images",
-    "camera_filename_pattern": "%Y-%m-%d_%H-%M-%S.jpg",
-    "camera_width": 1920,
-    "camera_height": 1080,
-    "camera_quality": 93,
-    "camera_rotation": 0,
-    "camera_hflip": False,
-    "camera_vflip": False,
-    "camera_timeout_ms": 1000,
-    
-}
+PATHS = ProjectPaths.from_env()
+BASE_DIR = str(PATHS.web_dir)
+CONFIG_PATH = str(PATHS.config_path)
+STATE_PATH = str(PATHS.state_path)
+COMMAND_PATH = str(PATHS.command_path)
+CSV_PATH = str(PATHS.climate_csv_path)
+LOG_DIR = str(PATHS.logs_dir)
+SENSOR_CSV_PATH = str(PATHS.sensor_csv_path)
+TEST_IMAGE_PATH = str(PATHS.images_dir / "test_capture.jpg")
+CONFIG_LOG_PATH = str(PATHS.logs_dir / "config_aenderungen.csv")
+ACTION_LOG_PATH = str(PATHS.action_log_path)
+DAILY_SUMMARY_JSON_PATH = str(PATHS.logs_dir / "daily_summary.json")
 
 
 def load_json(path, default=None):
@@ -177,44 +116,24 @@ def log_config_changes(old_config, new_config):
 
 
 def ensure_config():
-    os.makedirs(BASE_DIR, exist_ok=True)
-    if not os.path.exists(CONFIG_PATH):
-        save_json(CONFIG_PATH, DEFAULT_CONFIG)
+    ensure_project_config(Path(CONFIG_PATH))
 
 
 def load_config():
     ensure_config()
-    cfg = load_json(CONFIG_PATH, {})
-    merged = DEFAULT_CONFIG.copy()
-    merged.update(cfg)
-
-    if "light_sensor" not in cfg or not isinstance(cfg["light_sensor"], dict):
-        merged["light_sensor"] = DEFAULT_CONFIG["light_sensor"]
-    else:
-        light_sensor = DEFAULT_CONFIG["light_sensor"].copy()
-        light_sensor.update(cfg["light_sensor"])
-        merged["light_sensor"] = light_sensor
-
-    if "soil_sensors" not in cfg or not isinstance(cfg["soil_sensors"], list):
-        merged["soil_sensors"] = DEFAULT_CONFIG["soil_sensors"]
-    else:
-        defaults = DEFAULT_CONFIG["soil_sensors"]
-        sensors = []
-        for i in range(len(defaults)):
-            base = defaults[i].copy()
-            if i < len(cfg["soil_sensors"]) and isinstance(cfg["soil_sensors"][i], dict):
-                base.update(cfg["soil_sensors"][i])
-            base["index"] = i
-            sensors.append(base)
-        merged["soil_sensors"] = sensors
-
-    return merged
+    config = load_project_config(Path(CONFIG_PATH))
+    for index, sensor in enumerate(config["soil_sensors"]):
+        sensor["index"] = index
+    return config
 
 
 def save_config(config, old_config=None):
     if old_config is None:
         old_config = load_json(CONFIG_PATH, {})
 
+    errors = validate_config(config)
+    if errors:
+        raise ValueError("; ".join(errors))
     log_config_changes(old_config, config)
     save_json(CONFIG_PATH, config)
 
@@ -232,6 +151,10 @@ def load_state():
         "last_sensor_update": None,
         "last_watering_at": None,
         "last_watering_reason": None,
+        "active_controller": "legacy",
+        "last_decision_reasons": [],
+        "last_safety_overrides": [],
+        "run_id": None,
     })
 
 
@@ -249,12 +172,12 @@ def parse_float(value):
 
 
 def get_latest_image_info():
-    path = "/home/grow/gewaechshaus/images/latest.jpg"
-    if not os.path.exists(path):
+    path = PATHS.images_dir / "latest.jpg"
+    if not path.exists():
         return {"path": None, "time": None}
 
-    ts = datetime.fromtimestamp(os.path.getmtime(path)).isoformat(timespec="seconds")
-    return {"path": path, "time": ts}
+    ts = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+    return {"path": str(path), "time": ts}
 
 
 def parse_timestamp(value):
@@ -275,7 +198,7 @@ def parse_timestamp(value):
 
 
 def capture_test_image(config):
-    os.makedirs("/home/grow/gewaechshaus/images", exist_ok=True)
+    PATHS.images_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         "rpicam-still",
@@ -757,7 +680,7 @@ def config_page():
 
         config["camera_image_dir"] = form.get(
             "camera_image_dir",
-            config.get("camera_image_dir", "/home/grow/gewaechshaus/images"),
+            config.get("camera_image_dir", "images"),
         )
         config["camera_filename_pattern"] = form.get(
             "camera_filename_pattern",
@@ -790,7 +713,39 @@ def config_page():
             if value is not None:
                 config["light_sensor"][key] = int(value)
 
-        save_config(config, old_config)
+        for section, fields in {
+            "safety": (
+                "max_watering_pulse_seconds",
+                "max_daily_watering_seconds",
+                "sensor_stale_after_seconds",
+                "safe_state_after_seconds",
+            ),
+            "targets": (
+                "temperature_min_c",
+                "temperature_max_c",
+                "humidity_min_percent",
+                "humidity_max_percent",
+                "soil_moisture_min_percent",
+                "soil_moisture_max_percent",
+            ),
+        }.items():
+            for key in fields:
+                value = parse_float(form.get(f"{section}_{key}"))
+                if value is not None:
+                    config[section][key] = value
+
+        try:
+            save_config(config, old_config)
+        except ValueError as error:
+            state = load_state()
+            latest = read_latest_values()
+            return render_template(
+                "config.html",
+                config=config,
+                state=state,
+                latest=latest,
+                config_error=str(error),
+            ), 400
         return redirect(url_for("config_page"))
 
     state = load_state()
@@ -827,6 +782,12 @@ def api_status():
         "last_sensor_update": state.get("last_sensor_update"),
         "last_watering_at": state.get("last_watering_at"),
         "last_watering_reason": state.get("last_watering_reason"),
+        "active_controller": state.get(
+            "active_controller", config.get("controller", {}).get("active", "legacy")
+        ),
+        "last_decision_reasons": state.get("last_decision_reasons", []),
+        "last_safety_overrides": state.get("last_safety_overrides", []),
+        "run_id": state.get("run_id"),
     })
 
 
@@ -907,9 +868,9 @@ def api_calibrate(sensor_index):
 
 @app.route("/latest.jpg")
 def latest_image():
-    path = "/home/grow/gewaechshaus/images/latest.jpg"
-    if os.path.exists(path):
-        return send_file(path, mimetype="image/jpeg")
+    path = PATHS.images_dir / "latest.jpg"
+    if path.exists():
+        return send_file(str(path), mimetype="image/jpeg")
     return ("Kein Bild vorhanden", 404)
 
 
@@ -965,7 +926,9 @@ def create_zip_from_folder(folder_path, zip_prefix):
 @app.route("/download/images")
 def download_images():
     config = load_config()
-    image_dir = config.get("camera_image_dir", "/home/grow/gewaechshaus/images")
+    image_dir = str(
+        PATHS.resolve_configured_path(config.get("camera_image_dir", "images"))
+    )
 
     zip_path = create_zip_from_folder(image_dir, "bilder")
     if zip_path is None:
