@@ -672,6 +672,7 @@
     };
 
     const charts = {};
+    let dailyChartsRefreshInFlight = false;
 
     function safeNumber(value) {
       const number = Number(value);
@@ -1139,6 +1140,8 @@
     }
 
     async function refreshDailyCharts() {
+      if (dailyChartsRefreshInFlight) return;
+      dailyChartsRefreshInFlight = true;
       try {
         const rows = await fetchJson("/api/daily_summary");
         const labels = rows.map(row => row.date);
@@ -1186,11 +1189,20 @@
           labels,
           datasets: [
             { type: "bar", label: "Direkte Sonne (min)", data: rows.map(row => row.direct_sun_minutes), backgroundColor: "#f5b82e80", borderColor: "#d59400", borderWidth: 1, borderRadius: 5, yAxisID: "yMinutes" },
-            lineDataset("Lichtindex (%)", rows.map(row => row.light_index), "#c56a00", "yPercent")
+            {
+              ...lineDataset("Lichtindex (%)", rows.map(row => row.light_index), "#c56a00", "yPercent"),
+              type: "line"
+            }
           ]
         };
         if (!charts.light) {
-          charts.light = new Chart(document.getElementById("dailyLightChart"), {
+          const lightCanvas = document.getElementById("dailyLightChart");
+          const existingLightChart = Chart.getChart(lightCanvas);
+          if (existingLightChart) {
+            existingLightChart.destroy();
+          }
+          charts.light = new Chart(lightCanvas, {
+            type: "bar",
             data: lightData,
             options: {
               responsive: true, maintainAspectRatio: false, animation: false,
@@ -1209,6 +1221,8 @@
       } catch (error) {
         document.getElementById("waterEmpty").textContent = `Diagrammfehler: ${error.message}`;
         document.getElementById("waterEmpty").classList.remove("hidden");
+      } finally {
+        dailyChartsRefreshInFlight = false;
       }
     }
 
