@@ -85,10 +85,19 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "camera_vflip": False,
     "camera_timeout_ms": 1000,
     "controller": {
-        "active": "legacy",
+        "active": "baseline_fixed",
         "history_size": 120,
     },
     "controllers": {
+        "baseline_fixed": {
+            "exhaust_temperature_threshold_c": 28.0,
+            "exhaust_humidity_threshold_percent": 50.0,
+            "exhaust_min_temperature_c": 18.0,
+            "circulation_temperature_threshold_c": 24.0,
+            "circulation_humidity_threshold_percent": 45.0,
+            "soil_moisture_threshold_percent": 35.0,
+            "watering_seconds": 10.0,
+        },
         "legacy": {},
     },
     "safety": {
@@ -203,6 +212,33 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
     controller_id = config.get("controller", {}).get("active")
     if not isinstance(controller_id, str) or not controller_id:
         errors.append("controller.active muss gesetzt sein")
+    else:
+        from greenhouse.controllers.registry import registered_controller_ids
+
+        if controller_id not in registered_controller_ids():
+            errors.append(f"controller.active ist unbekannt: {controller_id}")
+
+    baseline_config = config.get("controllers", {}).get("baseline_fixed", {})
+    baseline_number_keys = (
+        "exhaust_temperature_threshold_c",
+        "exhaust_humidity_threshold_percent",
+        "exhaust_min_temperature_c",
+        "circulation_temperature_threshold_c",
+        "circulation_humidity_threshold_percent",
+        "soil_moisture_threshold_percent",
+        "watering_seconds",
+    )
+    for key in baseline_number_keys:
+        try:
+            value = float(baseline_config[key])
+            if key.endswith("_percent") and not 0 <= value <= 100:
+                errors.append(f"controllers.baseline_fixed.{key} muss 0–100 sein")
+            if key == "watering_seconds" and value <= 0:
+                errors.append(
+                    "controllers.baseline_fixed.watering_seconds muss größer als 0 sein"
+                )
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"controllers.baseline_fixed.{key} muss eine Zahl sein")
 
     safety = config.get("safety", {})
     try:

@@ -3,10 +3,19 @@
   "automation_enabled": true,
   "watering_enabled": true,
   "controller": {
-    "active": "legacy",
+    "active": "baseline_fixed",
     "history_size": 120
   },
   "controllers": {
+    "baseline_fixed": {
+      "exhaust_temperature_threshold_c": 28.0,
+      "exhaust_humidity_threshold_percent": 50.0,
+      "exhaust_min_temperature_c": 18.0,
+      "circulation_temperature_threshold_c": 24.0,
+      "circulation_humidity_threshold_percent": 45.0,
+      "soil_moisture_threshold_percent": 35.0,
+      "watering_seconds": 10.0
+    },
     "legacy": {}
   }
 }

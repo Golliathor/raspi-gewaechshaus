@@ -8,9 +8,27 @@ vergleichbare Regelungsvarianten:
 3. adaptive Regelung mit lokaler Sensorik,
 4. adaptive Regelung mit lokaler Sensorik und Wetterdaten.
 
-Der Basisstand stellt bewusst nur den bisherigen `legacy`-Regler bereit. Neue
-Regler implementieren dieselbe reine Schnittstelle und können dadurch mit
-identischen Sensordaten getestet werden.
+Der Branch `model/baseline-fixed` implementiert die erste Vergleichsvariante
+als `baseline_fixed`. Der bisherige `legacy`-Regler bleibt für
+Kompatibilitäts- und Charakterisierungstests verfügbar.
+
+## Baseline 1: feste Schwellwerte
+
+Der Regler ist zustandslos. Er berücksichtigt weder den vorherigen
+Relaiszustand noch vergangene Bewässerungen:
+
+- Abluft an bei `Temperatur >= 28 °C` oder bei
+  `Temperatur >= 18 °C` und `Luftfeuchte >= 50 %`
+- Umluft an bei `Temperatur >= 24 °C` oder
+  `Luftfeuchte >= 45 %`
+- fester Wasserimpuls von `10 s`, wenn bei einer fälligen Prüfung mindestens
+  ein aktivierter Bodensensor `<= 35 %` meldet
+- Lüfter sofort aus, sobald ihre feste Einschaltbedingung nicht mehr erfüllt ist
+- keine Hysterese und keine modellspezifische Sperrzeit
+
+Die Werte sind unter `controllers.baseline_fixed` konfigurierbar. Messintervall,
+Safety-Limits und das Bewässerungs-Prüfintervall gehören zur gemeinsamen
+Versuchsumgebung und bleiben für alle Modelle gleich.
 
 ## Architektur
 
@@ -63,7 +81,7 @@ Ein deterministischer Dry-Run mit dem mitgelieferten Fixture:
 
 ```bash
 python -m greenhouse.replay \
-  --controller legacy \
+  --controller baseline_fixed \
   --config examples/config.json \
   --input tests/fixtures/replay_snapshots.csv \
   --run-id smoke-test \
@@ -83,21 +101,31 @@ python -m greenhouse.importer \
   --output /tmp/snapshots.csv
 ```
 
-## Controller ergänzen
+## Controller auswählen
 
-Ein neuer Controller erhält eine eindeutige `controller_id`, implementiert
-`decide(snapshot, context, config)` und wird in
-`greenhouse.controllers.registry` registriert. Die Auswahl erfolgt über:
+Die Auswahl für Livebetrieb und Dashboard erfolgt über:
 
 ```json
 {
-  "controller": {"active": "legacy", "history_size": 120},
-  "controllers": {"legacy": {}}
+  "controller": {"active": "baseline_fixed", "history_size": 120},
+  "controllers": {
+    "baseline_fixed": {
+      "exhaust_temperature_threshold_c": 28.0,
+      "exhaust_humidity_threshold_percent": 50.0,
+      "exhaust_min_temperature_c": 18.0,
+      "circulation_temperature_threshold_c": 24.0,
+      "circulation_humidity_threshold_percent": 45.0,
+      "soil_moisture_threshold_percent": 35.0,
+      "watering_seconds": 10.0
+    }
+  }
 }
 ```
 
-Für die vier Varianten werden nach dem gemeinsamen Basis-Commit folgende
-Branches verwendet:
+Ein weiterer Controller erhält eine eindeutige `controller_id`, implementiert
+`decide(snapshot, context, config)` und wird in
+`greenhouse.controllers.registry` registriert. Die vier Vergleichsbranches
+sind:
 
 ```text
 model/baseline-fixed

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from greenhouse.controllers.base import Controller
+from greenhouse.controllers.baseline_fixed import BaselineFixedController
 from greenhouse.controllers.legacy import LegacyController
 
 
 _CONTROLLERS = {
+    BaselineFixedController.controller_id: BaselineFixedController,
     LegacyController.controller_id: LegacyController,
 }
 

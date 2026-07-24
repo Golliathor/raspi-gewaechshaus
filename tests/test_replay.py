@@ -14,6 +14,27 @@ FIXTURE = Path(__file__).parent / "fixtures" / "replay_snapshots.csv"
 
 
 class ReplayTests(unittest.TestCase):
+    def test_baseline_fixed_replay_uses_shared_output_contract(self) -> None:
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            results, summary = run_replay(
+                FIXTURE,
+                Path(directory),
+                controller_id="baseline_fixed",
+                config=config,
+                run_id="baseline-fixed-test",
+            )
+            decisions = (Path(directory) / "decisions.csv").read_text(
+                encoding="utf-8"
+            )
+
+        self.assertEqual(len(results), 3)
+        self.assertTrue(
+            all(result.controller_id == "baseline_fixed" for result in results)
+        )
+        self.assertEqual(summary["controller_id"], "baseline_fixed")
+        self.assertIn("baseline-fixed-test,baseline_fixed", decisions)
+
     def test_replay_is_deterministic_and_reports_metrics(self) -> None:
         config = copy.deepcopy(DEFAULT_CONFIG)
         with tempfile.TemporaryDirectory() as first_directory, tempfile.TemporaryDirectory() as second_directory:

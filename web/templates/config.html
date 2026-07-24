@@ -11,7 +11,7 @@
     .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
     .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     label { display: block; font-size: 0.95rem; margin-bottom: 4px; }
-    input[type="text"], input[type="number"], input[type="time"] {
+    input[type="text"], input[type="number"], input[type="time"], select {
       width: 100%;
       box-sizing: border-box;
       padding: 10px;
@@ -91,21 +91,40 @@
         <div style="margin-top:12px;">
           <label><input type="checkbox" name="automation_enabled" {% if config.automation_enabled %}checked{% endif %}> Automatik aktiv</label><br>
           <label><input type="checkbox" name="watering_enabled" {% if config.watering_enabled %}checked{% endif %}> Bewässerung aktiv</label><br>
-          <div>Aktiver Controller: <strong>{{ config.controller.active }}</strong></div>
+          <label for="controllerActive">Aktiver Controller</label>
+          <select id="controllerActive" name="controller_active">
+            {% for controller_id in controller_ids %}
+            <option value="{{ controller_id }}" {% if controller_id == config.controller.active %}selected{% endif %}>{{ controller_id }}</option>
+            {% endfor %}
+          </select>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Baseline 1: feste Schwellwerte</h2>
+        <div class="grid">
+          <div><label>Abluft Temperatur (°C)</label><input name="baseline_fixed_exhaust_temperature_threshold_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_temperature_threshold_c }}"></div>
+          <div><label>Abluft Luftfeuchte (%)</label><input name="baseline_fixed_exhaust_humidity_threshold_percent" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_humidity_threshold_percent }}"></div>
+          <div><label>Abluft Mindesttemperatur (°C)</label><input name="baseline_fixed_exhaust_min_temperature_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.exhaust_min_temperature_c }}"></div>
+          <div><label>Umluft Temperatur (°C)</label><input name="baseline_fixed_circulation_temperature_threshold_c" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.circulation_temperature_threshold_c }}"></div>
+          <div><label>Umluft Luftfeuchte (%)</label><input name="baseline_fixed_circulation_humidity_threshold_percent" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.circulation_humidity_threshold_percent }}"></div>
+          <div><label>Bodenfeuchte Gießgrenze (%)</label><input name="baseline_fixed_soil_moisture_threshold_percent" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.soil_moisture_threshold_percent }}"></div>
+          <div><label>Feste Gießdauer (s)</label><input name="baseline_fixed_watering_seconds" type="number" step="0.1" value="{{ config.controllers.baseline_fixed.watering_seconds }}"></div>
+        </div>
+        <p class="muted">Keine Hysterese und keine zusätzliche Sperrzeit. Die gemeinsame Safety-Schicht bleibt aktiv.</p>
       </div>
 
       <div class="card">
         <h2>Bewässerung</h2>
         <div class="grid">
           <div>
-            <label>Normale Gießdauer (s)</label>
+            <label>Legacy-/manuelle Gießdauer (s)</label>
             <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
             <label>Durchflussrate Wasser (ml/s)</label>
             <input type="number" step="0.1" name="water_flow_ml_per_second" value="{{ config.water_flow_ml_per_second }}">
           </div>
           <div>
-            <label>Fallback täglich (s)</label>
+            <label>Legacy-Fallback täglich (s)</label>
             <input name="watering_fallback_seconds" type="number" value="{{ config.watering_fallback_seconds }}">
           </div>
           <div>
@@ -120,7 +139,7 @@
       </div>
 
       <div class="card">
-        <h2>Lüfter</h2>
+        <h2>Legacy-Regler: Lüfter</h2>
         <div class="grid">
           <div><label>Abluft Temp EIN</label><input name="exhaust_temp_on_c" type="number" step="0.1" value="{{ config.exhaust_temp_on_c }}"></div>
           <div><label>Abluft Temp AUS</label><input name="exhaust_temp_off_c" type="number" step="0.1" value="{{ config.exhaust_temp_off_c }}"></div>
