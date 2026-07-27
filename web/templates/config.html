@@ -285,6 +285,20 @@
             <label>I2C-Adresse ADS1115 (dezimal, 0x48 = 72)</label>
             <input name="adc_address" type="number" value="{{ config.adc_address }}">
           </div>
+          <div>
+            <label>Messungen je Kanal</label>
+            <input name="adc_sample_count" type="number" min="1" max="31" step="2" value="{{ config.adc_sample_count }}">
+            <small>Ungerade Anzahl; Median entfernt einzelne Ausreißer.</small>
+          </div>
+          <div>
+            <label>Abstand der Messungen (ms)</label>
+            <input name="adc_sample_interval_ms" type="number" min="0" max="1000" step="1" value="{{ config.adc_sample_interval_ms }}">
+          </div>
+          <div>
+            <label>Bodenfilter EMA α</label>
+            <input name="soil_filter_alpha" type="number" min="0.01" max="1" step="0.01" value="{{ config.soil_filter_alpha }}">
+            <small>Kleiner = ruhiger. Standard 0,2 entspricht bei 30 s Messintervall etwa 2–3 Minuten Glättung.</small>
+          </div>
         </div>
 
         {% for sensor in config.soil_sensors %}

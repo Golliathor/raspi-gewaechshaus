@@ -65,6 +65,8 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"Ansatz B", response.data)
         self.assertIn(b"Chart.getChart(lightCanvas)", response.data)
         self.assertIn(b"dailyChartsRefreshInFlight", response.data)
+        self.assertIn(b"Gefilterter Regelwert", response.data)
+        self.assertIn(b"ADC-Spanne", response.data)
         for controller_id in (
             b"baseline_fixed",
             b"baseline_hysteresis",
@@ -133,6 +135,9 @@ class WebTests(unittest.TestCase):
         response = self.client.get("/config")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'name="adc_address"', response.data)
+        self.assertIn(b'name="adc_sample_count"', response.data)
+        self.assertIn(b'name="adc_sample_interval_ms"', response.data)
+        self.assertIn(b'name="soil_filter_alpha"', response.data)
         self.assertNotIn(b"pcf8591_address", response.data)
         self.assertIn(b'name="controller_active"', response.data)
         self.assertIn(
@@ -159,6 +164,9 @@ class WebTests(unittest.TestCase):
                 "adc_enabled": "on",
                 "adc_type": "ADS1115",
                 "adc_address": "73",
+                "adc_sample_count": "11",
+                "adc_sample_interval_ms": "25",
+                "soil_filter_alpha": "0.15",
                 "automation_enabled": "on",
                 "watering_enabled": "on",
                 "controller_active": "adaptive_local",
@@ -172,6 +180,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         saved = self.app_module.load_config()
         self.assertEqual(saved["adc_address"], 73)
+        self.assertEqual(saved["adc_sample_count"], 11)
+        self.assertEqual(saved["adc_sample_interval_ms"], 25)
+        self.assertEqual(saved["soil_filter_alpha"], 0.15)
         self.assertEqual(saved["controller"]["active"], "adaptive_local")
         self.assertEqual(
             saved["controllers"]["adaptive_local"]["trend_window_seconds"],

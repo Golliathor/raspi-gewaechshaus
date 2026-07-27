@@ -2,6 +2,9 @@
   "greenhouse_name": "Replay-Beispiel",
   "automation_enabled": true,
   "watering_enabled": true,
+  "adc_sample_count": 9,
+  "adc_sample_interval_ms": 40,
+  "soil_filter_alpha": 0.2,
   "weather": {
     "enabled": true,
     "provider": "open_meteo",

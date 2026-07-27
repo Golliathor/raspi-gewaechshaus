@@ -284,8 +284,19 @@
     }
     .sensor-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
     .sensor h3 { margin: 0; font-size: .95rem; }
+    .sensor-reading-label { margin-top: 8px; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; }
     .sensor-reading { font-size: 1.65rem; font-weight: 760; margin: 8px 0; }
     .sensor-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: .76rem; }
+    .sensor-filter-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px 10px;
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .72rem;
+    }
     .weather-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -857,6 +868,9 @@
         const pill = document.createElement("span");
         setPill(pill, value === null ? "Keine Daten" : value <= threshold ? "Trocken" : "Feucht", value === null ? "neutral" : value <= threshold ? "danger" : "good");
         head.append(title, pill);
+        const readingLabel = document.createElement("div");
+        readingLabel.className = "sensor-reading-label";
+        readingLabel.textContent = "Gefilterter Regelwert";
         const reading = document.createElement("div");
         reading.className = "sensor-reading";
         reading.textContent = value === null ? "–" : `${value.toFixed(1)} %`;
@@ -874,11 +888,26 @@
         const meta = document.createElement("div");
         meta.className = "sensor-meta";
         const channel = document.createElement("span");
-        channel.textContent = `Kanal ${sensor.channel ?? "–"} · Roh ${sensor.raw_value ?? "–"}`;
+        channel.textContent = `Kanal ${sensor.channel ?? "–"} · ADC-Median ${sensor.raw_value ?? "–"}`;
         const dry = document.createElement("span");
         dry.textContent = `Trocken ≤ ${threshold ?? "–"} %`;
         meta.append(channel, dry);
-        article.append(head, reading, meter, meta);
+        const filterMeta = document.createElement("div");
+        filterMeta.className = "sensor-filter-meta";
+        const unfiltered = safeNumber(sensor.unfiltered_moisture_percent);
+        const alpha = safeNumber(sensor.filter_alpha);
+        const diagnostics = [
+          `Direktwert: ${unfiltered === null ? "–" : `${unfiltered.toFixed(1)} %`}`,
+          `EMA α: ${alpha === null ? "–" : alpha.toFixed(2)}`,
+          `ADC-Spanne: ${sensor.raw_min ?? "–"}–${sensor.raw_max ?? "–"} (Δ ${sensor.raw_span ?? "–"})`,
+          `Gültige Samples: ${sensor.valid_samples ?? 0}/${sensor.requested_samples ?? "–"}`
+        ];
+        diagnostics.forEach(text => {
+          const item = document.createElement("span");
+          item.textContent = text;
+          filterMeta.appendChild(item);
+        });
+        article.append(head, readingLabel, reading, meter, meta, filterMeta);
         grid.appendChild(article);
       });
 

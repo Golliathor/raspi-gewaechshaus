@@ -16,7 +16,11 @@ if str(PROJECT_DIR) not in sys.path:
 from greenhouse.calibration import light_class, raw_to_light_percent, raw_to_percent
 from greenhouse.config import ProjectPaths, load_config, load_json, save_json
 from greenhouse.controllers import create_controller
-from greenhouse.hardware import ADS1115Reader, RaspberryPiRelayOutput
+from greenhouse.hardware import (
+    ADCBatchReading,
+    ADS1115Reader,
+    RaspberryPiRelayOutput,
+)
 from greenhouse.models import ActuatorState, SensorSnapshot, WeatherSnapshot
 from greenhouse.records import append_decision, append_snapshot
 from greenhouse.runtime import ControlEngine
@@ -119,39 +123,156 @@ def read_latest_climate() -> dict[str, Any]:
 
 
 class LocalSensorReader:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        initial_soil_states: list[dict[str, Any]] | None = None,
+        *,
+        initial_adc_address: int | None = None,
+    ) -> None:
         self._adc: ADS1115Reader | None = None
-        self._address: int | None = None
+        self._address = initial_adc_address
+        self._soil_filtered_percent: dict[int, float] = {}
+        self._soil_filter_signatures: dict[int, tuple[int, int, int, int]] = {}
+        for fallback_index, sensor in enumerate(initial_soil_states or []):
+            try:
+                index = int(sensor.get("index", fallback_index))
+                value = sensor.get("moisture_percent")
+                if value is None or not sensor.get("enabled", False):
+                    continue
+                self._soil_filtered_percent[index] = float(value)
+                self._soil_filter_signatures[index] = self._sensor_signature(
+                    sensor,
+                    index,
+                    initial_adc_address,
+                )
+            except (TypeError, ValueError):
+                continue
+
+    @staticmethod
+    def _sensor_signature(
+        sensor: dict[str, Any],
+        fallback_channel: int,
+        fallback_address: int | None = None,
+    ) -> tuple[int, int, int, int]:
+        return (
+            int(sensor.get("adc_address", fallback_address or 72)),
+            int(sensor.get("channel", fallback_channel)),
+            int(sensor.get("calibration_raw_dry", 26000)),
+            int(sensor.get("calibration_raw_wet", 12000)),
+        )
+
+    def _reset_filters(self) -> None:
+        self._soil_filtered_percent.clear()
+        self._soil_filter_signatures.clear()
 
     def _get_adc(self, config: dict[str, Any]) -> ADS1115Reader | None:
         if not config.get("adc_enabled", True):
+            self._adc = None
+            self._address = None
+            self._reset_filters()
             return None
         address = int(config.get("adc_address", 72))
-        if self._adc is None or self._address != address:
+        address_changed = self._address is not None and self._address != address
+        if self._adc is None or address_changed:
             self._adc = ADS1115Reader(address)
             self._address = address
+            if address_changed:
+                self._reset_filters()
         return self._adc
+
+    @staticmethod
+    def _read_batch(
+        adc: ADS1115Reader | None,
+        *,
+        enabled: bool,
+        channel: int,
+        sample_count: int,
+        sample_interval_seconds: float,
+    ) -> ADCBatchReading:
+        if not enabled or adc is None:
+            return ADCBatchReading(None, None, None, 0, sample_count)
+        return adc.read_channel_batch(
+            channel,
+            sample_count=sample_count,
+            sample_interval_seconds=sample_interval_seconds,
+        )
+
+    def _filter_soil_percent(
+        self,
+        *,
+        index: int,
+        sensor: dict[str, Any],
+        enabled: bool,
+        unfiltered_percent: float | None,
+        alpha: float,
+    ) -> float | None:
+        signature = self._sensor_signature(sensor, index, self._address)
+        if not enabled:
+            self._soil_filtered_percent.pop(index, None)
+            self._soil_filter_signatures.pop(index, None)
+            return None
+        if self._soil_filter_signatures.get(index) != signature:
+            self._soil_filtered_percent.pop(index, None)
+            self._soil_filter_signatures[index] = signature
+        if unfiltered_percent is None:
+            return None
+
+        previous = self._soil_filtered_percent.get(index)
+        filtered = (
+            unfiltered_percent
+            if previous is None
+            else alpha * unfiltered_percent + (1.0 - alpha) * previous
+        )
+        filtered = round(filtered, 1)
+        self._soil_filtered_percent[index] = filtered
+        return filtered
 
     def read(self, config: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         adc = self._get_adc(config)
+        sample_count = int(config.get("adc_sample_count", 9))
+        sample_interval_seconds = (
+            float(config.get("adc_sample_interval_ms", 40)) / 1000.0
+        )
+        alpha = max(0.0001, min(1.0, float(config.get("soil_filter_alpha", 0.2))))
         soil_states: list[dict[str, Any]] = []
         for index, sensor in enumerate(config.get("soil_sensors", [])[:3]):
             enabled = bool(sensor.get("enabled", False))
             channel = int(sensor.get("channel", index))
-            raw = adc.read_channel(channel) if enabled and adc else None
-            percent = raw_to_percent(
-                raw,
+            batch = self._read_batch(
+                adc,
+                enabled=enabled,
+                channel=channel,
+                sample_count=sample_count,
+                sample_interval_seconds=sample_interval_seconds,
+            )
+            unfiltered_percent = raw_to_percent(
+                batch.value,
                 sensor.get("calibration_raw_dry", 26000),
                 sensor.get("calibration_raw_wet", 12000),
+            )
+            percent = self._filter_soil_percent(
+                index=index,
+                sensor=sensor,
+                enabled=enabled,
+                unfiltered_percent=unfiltered_percent,
+                alpha=alpha,
             )
             soil_states.append(
                 {
                     "index": index,
                     "name": sensor.get("name", f"Sensor {index + 1}"),
                     "enabled": enabled,
+                    "adc_address": self._address,
                     "channel": channel,
-                    "raw_value": raw,
+                    "raw_value": batch.value,
+                    "raw_min": batch.minimum,
+                    "raw_max": batch.maximum,
+                    "raw_span": batch.span,
+                    "valid_samples": batch.valid_samples,
+                    "requested_samples": batch.requested_samples,
+                    "unfiltered_moisture_percent": unfiltered_percent,
                     "moisture_percent": percent,
+                    "filter_alpha": alpha,
                     "dry_below_percent": sensor.get("dry_below_percent", 35),
                     "calibration_raw_dry": sensor.get(
                         "calibration_raw_dry", 26000
@@ -165,9 +286,15 @@ class LocalSensorReader:
         light_config = config.get("light_sensor", {})
         light_enabled = bool(light_config.get("enabled", False))
         light_channel = int(light_config.get("channel", 3))
-        light_raw = adc.read_channel(light_channel) if light_enabled and adc else None
+        light_batch = self._read_batch(
+            adc,
+            enabled=light_enabled,
+            channel=light_channel,
+            sample_count=sample_count,
+            sample_interval_seconds=sample_interval_seconds,
+        )
         light_percent = raw_to_light_percent(
-            light_raw,
+            light_batch.value,
             light_config.get("calibration_raw_dark", 26000),
             light_config.get("calibration_raw_bright", 2000),
         )
@@ -175,7 +302,12 @@ class LocalSensorReader:
             "name": light_config.get("name", "Lichtsensor"),
             "enabled": light_enabled,
             "channel": light_channel,
-            "raw_value": light_raw,
+            "raw_value": light_batch.value,
+            "raw_min": light_batch.minimum,
+            "raw_max": light_batch.maximum,
+            "raw_span": light_batch.span,
+            "valid_samples": light_batch.valid_samples,
+            "requested_samples": light_batch.requested_samples,
             "light_percent": light_percent,
             "light_class": light_class(light_percent),
             "calibration_raw_dark": light_config.get(
@@ -384,11 +516,36 @@ def serialize_climate(climate: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def restorable_soil_states(
+    state: dict[str, Any],
+    config: dict[str, Any],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    last_update = parse_timestamp(state.get("last_sensor_update"))
+    if last_update is None:
+        return []
+    maximum_age = max(
+        120.0,
+        3.0 * float(config.get("sensor_read_interval_seconds", 30)),
+    )
+    age = (now - last_update).total_seconds()
+    soil_states = state.get("soil_sensors", [])
+    return (
+        soil_states
+        if 0 <= age <= maximum_age and isinstance(soil_states, list)
+        else []
+    )
+
+
 def main() -> None:
     relay_output = RaspberryPiRelayOutput()
-    sensor_reader = LocalSensorReader()
     state = load_json(PATHS.state_path, {}) or {}
     config = load_config(PATHS.config_path, validate=True)
+    startup_time = datetime.now()
+    sensor_reader = LocalSensorReader(
+        restorable_soil_states(state, config, startup_time),
+        initial_adc_address=int(config.get("adc_address", 72)),
+    )
     controller_id = config["controller"]["active"]
     engine = ControlEngine(
         create_controller(controller_id),

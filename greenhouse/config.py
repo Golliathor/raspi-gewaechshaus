@@ -38,6 +38,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "adc_enabled": True,
     "adc_type": "ADS1115",
     "adc_address": 72,
+    "adc_sample_count": 9,
+    "adc_sample_interval_ms": 40,
+    "soil_filter_alpha": 0.2,
     "sensor_read_interval_seconds": 30,
     "watering_check_interval_seconds": 300,
     "control_loop_interval_seconds": 5,
@@ -289,6 +292,37 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
                 errors.append(f"{key} muss größer als 0 sein")
         except (KeyError, TypeError, ValueError):
             errors.append(f"{key} muss eine Zahl sein")
+
+    try:
+        sample_count_number = float(config["adc_sample_count"])
+        sample_count = int(sample_count_number)
+        if (
+            sample_count_number != sample_count
+            or sample_count < 1
+            or sample_count > 31
+            or sample_count % 2 == 0
+        ):
+            errors.append(
+                "adc_sample_count muss eine ungerade ganze Zahl zwischen 1 und 31 sein"
+            )
+    except (KeyError, TypeError, ValueError):
+        errors.append("adc_sample_count muss eine Zahl sein")
+
+    try:
+        sample_interval_ms = float(config["adc_sample_interval_ms"])
+        if not 0 <= sample_interval_ms <= 1000:
+            errors.append(
+                "adc_sample_interval_ms muss zwischen 0 und 1000 liegen"
+            )
+    except (KeyError, TypeError, ValueError):
+        errors.append("adc_sample_interval_ms muss eine Zahl sein")
+
+    try:
+        filter_alpha = float(config["soil_filter_alpha"])
+        if not 0 < filter_alpha <= 1:
+            errors.append("soil_filter_alpha muss größer 0 und höchstens 1 sein")
+    except (KeyError, TypeError, ValueError):
+        errors.append("soil_filter_alpha muss eine Zahl sein")
 
     controller_id = config.get("controller", {}).get("active")
     if not isinstance(controller_id, str) or not controller_id:

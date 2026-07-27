@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
+from statistics import median
 from typing import Protocol
 
 from greenhouse.models import ActuatorState
@@ -60,6 +63,21 @@ class MemoryRelayOutput:
         self.set_state(ActuatorState())
 
 
+@dataclass(frozen=True)
+class ADCBatchReading:
+    value: int | None
+    minimum: int | None
+    maximum: int | None
+    valid_samples: int
+    requested_samples: int
+
+    @property
+    def span(self) -> int | None:
+        if self.minimum is None or self.maximum is None:
+            return None
+        return self.maximum - self.minimum
+
+
 class ADS1115Reader:
     """ADC-Adapter mit verzögerten Adafruit-Imports."""
 
@@ -92,3 +110,34 @@ class ADS1115Reader:
             return int(analog.value)
         except Exception:
             return None
+
+    def read_channel_batch(
+        self,
+        channel: int,
+        *,
+        sample_count: int = 9,
+        sample_interval_seconds: float = 0.04,
+    ) -> ADCBatchReading:
+        requested = max(1, min(31, int(sample_count)))
+        interval = max(0.0, float(sample_interval_seconds))
+        values: list[int] = []
+        for sample_index in range(requested):
+            value = self.read_channel(channel)
+            if value is not None:
+                values.append(value)
+            if interval > 0 and sample_index + 1 < requested:
+                time.sleep(interval)
+
+        minimum_valid = requested // 2 + 1
+        stable_value = (
+            int(round(median(values)))
+            if len(values) >= minimum_valid
+            else None
+        )
+        return ADCBatchReading(
+            value=stable_value,
+            minimum=min(values) if values else None,
+            maximum=max(values) if values else None,
+            valid_samples=len(values),
+            requested_samples=requested,
+        )

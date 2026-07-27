@@ -46,6 +46,16 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(any("safe_state_after_seconds" in error for error in errors))
         self.assertTrue(any("temperature_min_c" in error for error in errors))
 
+    def test_invalid_adc_filter_parameters_are_reported(self) -> None:
+        config = load_config(Path("/does/not/exist"))
+        config["adc_sample_count"] = 8
+        config["adc_sample_interval_ms"] = -1
+        config["soil_filter_alpha"] = 1.5
+        errors = validate_config(config)
+        self.assertTrue(any("adc_sample_count" in error for error in errors))
+        self.assertTrue(any("adc_sample_interval_ms" in error for error in errors))
+        self.assertTrue(any("soil_filter_alpha" in error for error in errors))
+
     def test_invalid_adaptive_parameters_and_controller_are_reported(self) -> None:
         config = load_config(Path("/does/not/exist"))
         adaptive = config["controllers"]["adaptive_local"]

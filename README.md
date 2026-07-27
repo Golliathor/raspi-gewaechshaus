@@ -223,6 +223,15 @@ Die vier Einzelbranches bleiben eingefrorene, reproduzierbare Versuchsstände.
 Website vorgesehen. Alle Branches behalten Snapshot-, Entscheidungs- und
 Metrikformat unverändert.
 
+Die lokalen ADC-Kanäle werden standardmäßig neunmal im Abstand von 40 ms
+gelesen. Der Median dieser Rohwerte entfernt einzelne Ausreißer. Für
+Bodenfeuchte wird anschließend ein EMA-Filter mit `alpha = 0.2` angewendet;
+nur dieser gefilterte Prozentwert wird an Controller und Safety-Layer
+übergeben. Dashboard und `logs/sensoren.csv` zeigen ADC-Median und gefilterten
+Regelwert getrennt. Die Parameter `adc_sample_count`,
+`adc_sample_interval_ms` und `soil_filter_alpha` sind auf der
+Konfigurationsseite einstellbar.
+
 ## Raspberry-Pi-Abnahme
 
 Vor dem ersten Livebetrieb:
