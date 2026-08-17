@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import os
 import subprocess
 import sys
@@ -158,6 +159,53 @@ def load_state():
         "last_safety_overrides": [],
         "run_id": None,
     })
+
+
+def get_watering_limits(config, state, requested_seconds=None):
+    """Return the currently available manual watering duration.
+
+    The web process only reports a preview. The automation daemon remains the
+    authority and applies the limits again when it executes the command.
+    """
+    safety = config.get("safety", {})
+    maximum_pulse = max(
+        0.0, float(safety.get("max_watering_pulse_seconds", 60))
+    )
+    daily_limit = max(
+        0.0, float(safety.get("max_daily_watering_seconds", 180))
+    )
+    runtime = state.get("control_runtime", {})
+    today = datetime.now().date().isoformat()
+    daily_used = (
+        max(0.0, float(runtime.get("daily_watering_seconds", 0.0)))
+        if runtime.get("watering_day") == today
+        else 0.0
+    )
+    daily_remaining = max(0.0, daily_limit - daily_used)
+    valve_active = bool(state.get("relays", {}).get("water_valve", False))
+    currently_available = (
+        0.0 if valve_active else min(maximum_pulse, daily_remaining)
+    )
+    result = {
+        "max_pulse_seconds": maximum_pulse,
+        "max_daily_seconds": daily_limit,
+        "daily_used_seconds": daily_used,
+        "daily_remaining_seconds": daily_remaining,
+        "currently_available_seconds": currently_available,
+        "valve_active": valve_active,
+    }
+    if requested_seconds is not None:
+        requested = max(0.0, float(requested_seconds))
+        result.update(
+            {
+                "requested_seconds": requested,
+                "estimated_applied_seconds": min(
+                    requested, currently_available
+                ),
+                "will_be_limited": requested > currently_available,
+            }
+        )
+    return result
 
 
 def write_command(command):
@@ -844,6 +892,8 @@ def api_status():
             "last_decision_diagnostics", {}
         ),
         "last_safety_overrides": state.get("last_safety_overrides", []),
+        "last_command_result": state.get("last_command_result"),
+        "watering_limits": get_watering_limits(config, state),
         "weather": state.get("weather", {}),
         "weather_available": state.get("weather_available", False),
         "last_weather_error": state.get("last_weather_error"),
@@ -925,12 +975,20 @@ def api_set_controller():
 @app.route("/api/water_pulse", methods=["POST"])
 def api_water_pulse():
     data = request.get_json(silent=True) or {}
-    seconds = int(data.get("seconds", 10))
+    try:
+        seconds = float(data.get("seconds", 10))
+    except (TypeError, ValueError):
+        return jsonify({"error": "seconds muss eine Zahl sein"}), 400
+    if not math.isfinite(seconds) or seconds <= 0:
+        return jsonify({"error": "seconds muss größer als 0 sein"}), 400
+    config = load_config()
+    state = load_state()
+    limits = get_watering_limits(config, state, seconds)
     write_command({
         "type": "water_pulse",
         "seconds": seconds,
     })
-    return jsonify({"ok": True, "seconds": seconds})
+    return jsonify({"ok": True, "seconds": seconds, **limits})
 
 
 @app.route("/api/calibrate/<int:sensor_index>", methods=["POST"])

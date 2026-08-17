@@ -46,6 +46,12 @@ Manuelle Wasseranforderungen unterliegen:
 - verbleibendem Tageslimit,
 - Schutz vor einem bereits laufenden Impuls.
 
+Das Dashboard zeigt deshalb direkt unter der Bewässerung die aktuell maximal
+mögliche Dauer und die verbleibende Tagesdauer. Nach der Verarbeitung steht
+bei „Letzter manueller Impuls“ sowohl die angeforderte als auch die tatsächlich
+ausgeführte Zeit. Eine Anzeige wie „100 s ausgeführt von 600 s angefordert“ ist
+ein Safety-Eingriff und kein Zeitgeberfehler.
+
 Bei aktivierter Automatik kann der nächste Regelzyklus einen manuell gesetzten
 Lüfterzustand wieder ändern. Für einen kontrollierten manuellen Test zuerst die
 Automatik deaktivieren.
@@ -67,7 +73,7 @@ LAN verwenden.
 | `POST /api/relays/<name>` | Relaisanforderung, JSON `{"on":true}` |
 | `POST /api/automation/toggle` | JSON `{"enabled":false}` |
 | `POST /api/controller` | JSON `{"controller_id":"adaptive_local"}` |
-| `POST /api/water_pulse` | JSON `{"seconds":10}` |
+| `POST /api/water_pulse` | JSON `{"seconds":10}`; Antwort enthält aktuelle Limits |
 | `POST /api/calibrate/<index>` | JSON `{"calibration_type":"dry"}` |
 | `POST /api/camera/test_capture` | unmittelbares Testbild |
 | `GET /latest.jpg` | aktuelles Zeitrafferbild |

@@ -21,6 +21,8 @@
     button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; background: #1f7a4d; color: white; }
     a { color: #1f7a4d; text-decoration: none; }
     .sensor-block { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-top: 12px; }
+    .hint { display: block; margin-top: 6px; color: #59665e; line-height: 1.4; }
+    .warning { margin-top: 14px; padding: 12px; border-radius: 8px; background: #fff7ed; color: #9a3412; }
   </style>
 </head>
 <body>
@@ -235,12 +237,35 @@
 
       <div class="card">
         <h2>Bewässerung</h2>
+        <p class="warning">
+          Die gewünschte Gießdauer wird immer auf den maximalen Wasserimpuls
+          und die noch freie Tagesdauer begrenzt. Für einen tatsächlichen
+          600-s-Impuls müssen daher Gießdauer, maximaler Wasserimpuls und
+          Tageslimit jeweils mindestens 600 s erlauben; außerdem muss das
+          Tageskonto noch frei sein.
+          {% set configured_manual_maximum = [config.watering_seconds, config.safety.max_watering_pulse_seconds, config.safety.max_daily_watering_seconds] | min %}
+          <strong>
+            Aktuell sind für den manuellen Standardimpuls höchstens
+            {{ configured_manual_maximum }} s konfiguriert.
+          </strong>
+        </p>
         <div class="grid">
           <div>
             <label>Legacy-/manuelle Gießdauer (s)</label>
-            <input name="watering_seconds" type="number" value="{{ config.watering_seconds }}">
+            <input name="watering_seconds" type="number" min="0.1" step="0.1" value="{{ config.watering_seconds }}">
+            <small class="hint">Vorgabewert für den manuellen Relaisknopf und den Legacy-Regler.</small>
             <label>Durchflussrate Wasser (ml/s)</label>
             <input type="number" step="0.1" name="water_flow_ml_per_second" value="{{ config.water_flow_ml_per_second }}">
+          </div>
+          <div>
+            <label>Maximaler Wasserimpuls (s)</label>
+            <input name="safety_max_watering_pulse_seconds" type="number" min="0.1" step="0.1" value="{{ config.safety.max_watering_pulse_seconds }}">
+            <small class="hint">Harte Safety-Obergrenze für automatische und manuelle Impulse.</small>
+          </div>
+          <div>
+            <label>Maximale Bewässerung pro Tag (s)</label>
+            <input name="safety_max_daily_watering_seconds" type="number" min="0.1" step="0.1" value="{{ config.safety.max_daily_watering_seconds }}">
+            <small class="hint">Muss mindestens so groß wie der maximale Einzelimpuls sein.</small>
           </div>
           <div>
             <label>Legacy-Fallback täglich (s)</label>
@@ -354,8 +379,6 @@
       <div class="card">
         <h2>Sicherheit und Zielbereiche</h2>
         <div class="grid">
-          <div><label>Maximaler Wasserimpuls (s)</label><input name="safety_max_watering_pulse_seconds" type="number" step="0.1" value="{{ config.safety.max_watering_pulse_seconds }}"></div>
-          <div><label>Maximale Bewässerung pro Tag (s)</label><input name="safety_max_daily_watering_seconds" type="number" step="0.1" value="{{ config.safety.max_daily_watering_seconds }}"></div>
           <div><label>Sensor gilt als veraltet nach (s)</label><input name="safety_sensor_stale_after_seconds" type="number" step="1" value="{{ config.safety.sensor_stale_after_seconds }}"></div>
           <div><label>Sicherer Aus-Zustand nach (s)</label><input name="safety_safe_state_after_seconds" type="number" step="1" value="{{ config.safety.safe_state_after_seconds }}"></div>
           <div><label>Temperatur Ziel min. (°C)</label><input name="targets_temperature_min_c" type="number" step="0.1" value="{{ config.targets.temperature_min_c }}"></div>

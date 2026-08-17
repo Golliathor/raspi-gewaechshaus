@@ -519,7 +519,7 @@
         </article>
         <article class="actuator">
           <div class="actuator-head"><h3>Bewässerung</h3><span class="status-pill neutral" id="relayWater">–</span></div>
-          <p class="muted small">Wasserimpulse bleiben durch den Safety-Layer begrenzt.</p>
+          <p class="muted small" id="waterSafetySummary">Wasserimpulse bleiben durch den Safety-Layer begrenzt.</p>
           <div class="button-row">
             <input id="waterSeconds" aria-label="Bewässerungsdauer in Sekunden" type="number" min="1" value="{{ config.watering_seconds }}">
             <button type="button" onclick="waterPulse()">Impuls starten</button>
@@ -530,6 +530,7 @@
       <div class="command-feedback" id="commandFeedback" aria-live="polite"></div>
       <div class="meta-row"><span>Letzte Bewässerung</span><strong id="lastWateringAt">{{ state.last_watering_at or "–" }}</strong></div>
       <div class="meta-row"><span>Letzter Bewässerungsgrund</span><strong id="lastWateringReason">{{ state.last_watering_reason or "–" }}</strong></div>
+      <div class="meta-row"><span>Letzter manueller Impuls</span><strong id="lastManualWateringResult">–</strong></div>
     </section>
 
     <section class="card section" aria-labelledby="sensorHeading">
@@ -1175,6 +1176,8 @@
         document.getElementById("lastSensorUpdate").textContent = data.last_sensor_update || "–";
         document.getElementById("lastWateringAt").textContent = data.last_watering_at || "–";
         document.getElementById("lastWateringReason").textContent = REASON_LABELS[data.last_watering_reason] || data.last_watering_reason || "–";
+        renderWateringLimits(data.watering_limits || {});
+        renderManualWateringResult(data.last_command_result);
         document.getElementById("lastImageTime").textContent = data.last_image_time || "–";
         renderReasons(data.last_decision_reasons);
         renderSafety(data.last_safety_overrides);
@@ -1403,6 +1406,40 @@
       }
     }
 
+    function secondsLabel(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "–";
+      return `${number.toLocaleString("de-DE", { maximumFractionDigits: 1 })} s`;
+    }
+
+    function renderWateringLimits(limits) {
+      const maximum = Number(limits.max_pulse_seconds);
+      const remaining = Number(limits.daily_remaining_seconds);
+      const available = Number(limits.currently_available_seconds);
+      const summary = document.getElementById("waterSafetySummary");
+      const input = document.getElementById("waterSeconds");
+      if (![maximum, remaining, available].every(Number.isFinite)) {
+        summary.textContent = "Wasserimpulse bleiben durch den Safety-Layer begrenzt.";
+        return;
+      }
+      summary.textContent = limits.valve_active
+        ? `Ventil ist aktiv · Impulslimit ${secondsLabel(maximum)} · heute noch ${secondsLabel(remaining)}`
+        : `Aktuell höchstens ${secondsLabel(available)} · Impulslimit ${secondsLabel(maximum)} · heute noch ${secondsLabel(remaining)}`;
+      input.dataset.currentlyAvailableSeconds = String(available);
+    }
+
+    function renderManualWateringResult(result) {
+      if (!result || result.type !== "water_pulse") return;
+      const requested = Number(result.requested_seconds);
+      const applied = Number(result.applied_seconds);
+      if (!Number.isFinite(requested) || !Number.isFinite(applied)) return;
+      const suffix = result.limited
+        ? " (durch Safety begrenzt)"
+        : "";
+      document.getElementById("lastManualWateringResult").textContent =
+        `${secondsLabel(applied)} ausgeführt von ${secondsLabel(requested)} angefordert${suffix}`;
+    }
+
     function setRelay(name, on) {
       return sendCommand(`/api/relays/${name}`, {
         method: "POST",
@@ -1449,13 +1486,23 @@
       }
     }
 
-    function waterPulse() {
-      const seconds = Math.max(1, parseInt(document.getElementById("waterSeconds").value || "10", 10));
-      return sendCommand("/api/water_pulse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seconds })
-      }, `Wasserimpuls über ${seconds} Sekunden angefordert.`);
+    async function waterPulse() {
+      const seconds = Math.max(0.1, parseFloat(document.getElementById("waterSeconds").value || "10"));
+      const feedback = document.getElementById("commandFeedback");
+      feedback.textContent = "Wasserimpuls wird angefordert …";
+      try {
+        const result = await fetchJson("/api/water_pulse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seconds })
+        });
+        feedback.textContent = result.will_be_limited
+          ? `${secondsLabel(result.requested_seconds)} angefordert; der Safety-Layer erlaubt aktuell höchstens ${secondsLabel(result.estimated_applied_seconds)}.`
+          : `${secondsLabel(result.requested_seconds)} angefordert.`;
+        setTimeout(refreshStatus, 500);
+      } catch (error) {
+        feedback.textContent = `Befehl fehlgeschlagen: ${error.message}`;
+      }
     }
 
     function loadLatestImage() {

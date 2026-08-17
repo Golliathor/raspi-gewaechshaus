@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -43,6 +44,11 @@ class WebTests(unittest.TestCase):
         self.assertIn("last_decision_reasons", data)
         self.assertIn("last_decision_diagnostics", data)
         self.assertIn("last_safety_overrides", data)
+        self.assertIn("last_command_result", data)
+        self.assertIn("watering_limits", data)
+        self.assertEqual(
+            data["watering_limits"]["max_pulse_seconds"], 60.0
+        )
         self.assertIn("weather_available", data)
         self.assertIn("last_weather_error", data)
 
@@ -59,6 +65,8 @@ class WebTests(unittest.TestCase):
             b'id="dailyWaterChart"',
             b'id="controllerSelect"',
             b'id="weatherForecast"',
+            b'id="waterSafetySummary"',
+            b'id="lastManualWateringResult"',
         ):
             self.assertIn(element_id, response.data)
         self.assertIn(b"Baseline 1", response.data)
@@ -67,6 +75,7 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"dailyChartsRefreshInFlight", response.data)
         self.assertIn(b"Gefilterter Regelwert", response.data)
         self.assertIn(b"ADC-Spanne", response.data)
+        self.assertIn(b"der Safety-Layer erlaubt aktuell", response.data)
         for controller_id in (
             b"baseline_fixed",
             b"baseline_hysteresis",
@@ -157,6 +166,11 @@ class WebTests(unittest.TestCase):
             b'name="adaptive_weather_weather_max_age_seconds"',
             response.data,
         )
+        self.assertEqual(
+            response.data.count(b'name="safety_max_watering_pulse_seconds"'),
+            1,
+        )
+        self.assertIn(b"600-s-Impuls", response.data)
 
         response = self.client.post(
             "/config",
@@ -196,6 +210,74 @@ class WebTests(unittest.TestCase):
             ],
             1800,
         )
+
+    def test_manual_watering_api_reports_safety_limit(self) -> None:
+        config = self.app_module.load_config()
+        config["watering_seconds"] = 600
+        config["safety"]["max_watering_pulse_seconds"] = 100
+        config["safety"]["max_daily_watering_seconds"] = 600
+        self.app_module.save_config(config)
+        self.app_module.save_json(
+            self.app_module.PATHS.state_path,
+            {
+                "relays": {"water_valve": False},
+                "control_runtime": {
+                    "watering_day": datetime.now().date().isoformat(),
+                    "daily_watering_seconds": 0,
+                },
+            },
+        )
+
+        response = self.client.post("/api/water_pulse", json={"seconds": 600})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["requested_seconds"], 600)
+        self.assertEqual(data["estimated_applied_seconds"], 100)
+        self.assertTrue(data["will_be_limited"])
+        command = json.loads(
+            self.app_module.PATHS.command_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(command, {"type": "water_pulse", "seconds": 600.0})
+
+        config["safety"]["max_watering_pulse_seconds"] = 600
+        self.app_module.save_config(config)
+        response = self.client.post("/api/water_pulse", json={"seconds": 600})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["estimated_applied_seconds"], 600)
+        self.assertFalse(response.get_json()["will_be_limited"])
+
+    def test_manual_watering_api_rejects_invalid_duration(self) -> None:
+        response = self.client.post(
+            "/api/water_pulse", json={"seconds": "nicht-zahl"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.app_module.PATHS.command_path.exists())
+
+    def test_daemon_records_requested_and_applied_manual_duration(self) -> None:
+        import web.automation_daemon as automation_module
+
+        automation_module = importlib.reload(automation_module)
+        config = self.app_module.load_config()
+        config["safety"]["max_watering_pulse_seconds"] = 100
+        config["safety"]["max_daily_watering_seconds"] = 600
+        engine = automation_module.ControlEngine(
+            automation_module.create_controller("legacy"), config
+        )
+        automation_module.save_json(
+            automation_module.PATHS.command_path,
+            {"type": "water_pulse", "seconds": 600},
+        )
+
+        _, state = automation_module.handle_command(
+            config, {}, engine, datetime(2026, 8, 18, 12)
+        )
+
+        result = state["last_command_result"]
+        self.assertEqual(result["requested_seconds"], 600)
+        self.assertEqual(result["applied_seconds"], 100)
+        self.assertTrue(result["limited"])
+        self.assertIn("watering_pulse_limited", result["limit_reasons"])
 
 
 if __name__ == "__main__":

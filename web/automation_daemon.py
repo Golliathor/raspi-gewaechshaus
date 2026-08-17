@@ -456,11 +456,39 @@ def handle_command(
             )
     elif command_type == "water_pulse":
         requested = float(command.get("seconds", config.get("watering_seconds", 10)))
+        valve_was_active = engine.state.water_valve
+        maximum_pulse = max(
+            0.0,
+            float(
+                config.get("safety", {}).get(
+                    "max_watering_pulse_seconds", 60
+                )
+            ),
+        )
         applied = engine.request_manual_watering(requested, now)
-        result.update({"ok": applied > 0, "seconds": applied})
+        limit_reasons: list[str] = []
+        if valve_was_active:
+            limit_reasons.append("water_valve_already_active")
+        if requested > maximum_pulse:
+            limit_reasons.append("watering_pulse_limited")
+        if not valve_was_active and applied < min(requested, maximum_pulse):
+            limit_reasons.append("daily_watering_limit")
+        result.update(
+            {
+                "ok": applied > 0,
+                "requested_seconds": requested,
+                "applied_seconds": applied,
+                "seconds": applied,
+                "limited": applied < requested,
+                "limit_reasons": limit_reasons,
+            }
+        )
         log_action(
             "manual_watering_requested",
-            f"requested_seconds={requested}; applied_seconds={applied}",
+            (
+                f"requested_seconds={requested}; applied_seconds={applied}; "
+                f"limit_reasons={'|'.join(limit_reasons)}"
+            ),
             source="web_command",
         )
     elif command_type == "set_automation":

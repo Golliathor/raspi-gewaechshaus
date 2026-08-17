@@ -156,6 +156,35 @@ class SafetyAndRuntimeTests(unittest.TestCase):
         self.assertFalse(stopped.state.water_valve)
         self.assertIn("water_valve:off", stopped.transitions)
 
+    def test_manual_watering_is_limited_by_pulse_and_daily_capacity(self) -> None:
+        self.config["safety"]["max_watering_pulse_seconds"] = 100
+        self.config["safety"]["max_daily_watering_seconds"] = 250
+        engine = ControlEngine(LegacyController(), self.config)
+
+        first = engine.request_manual_watering(600, NOW)
+        engine.set_manual_relay(
+            "water_valve", False, NOW + timedelta(seconds=100)
+        )
+        engine.daily_watering_seconds = 220
+        second = engine.request_manual_watering(
+            600, NOW + timedelta(seconds=101)
+        )
+
+        self.assertEqual(first, 100)
+        self.assertEqual(second, 30)
+
+    def test_manual_watering_runs_full_requested_duration_when_limits_allow_it(self) -> None:
+        self.config["safety"]["max_watering_pulse_seconds"] = 600
+        self.config["safety"]["max_daily_watering_seconds"] = 600
+        engine = ControlEngine(LegacyController(), self.config)
+
+        applied = engine.request_manual_watering(600, NOW)
+
+        self.assertEqual(applied, 600)
+        self.assertEqual(
+            engine.watering_until, NOW + timedelta(seconds=600)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

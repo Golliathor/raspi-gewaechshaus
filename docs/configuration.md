@@ -213,7 +213,21 @@ Ansatz B liest zuerst die lokalen Parameter aus `adaptive_local`. Unter
 | `safety.safe_state_after_seconds` | `600` | danach Lüfter AUS |
 
 Manuelle Wasserbefehle werden ebenfalls durch Impuls- und Tagesgrenze
-begrenzt.
+begrenzt. Die tatsächlich mögliche Dauer ist:
+
+```text
+min(
+  gewünschte Dauer,
+  safety.max_watering_pulse_seconds,
+  safety.max_daily_watering_seconds - heutige Bewässerungssekunden
+)
+```
+
+Beispiel: Eine Gießdauer von 600 s bei einem maximalen Wasserimpuls von 100 s
+schaltet genau 100 s. Für einen vollständigen 600-s-Impuls müssen sowohl
+`max_watering_pulse_seconds` als auch `max_daily_watering_seconds` mindestens
+600 s betragen. Diese Limits nur nach Prüfung von Durchfluss, Behälter,
+Drainage und Ausfallsicherheit erhöhen.
 
 ## Zielbereiche für Kennzahlen
 

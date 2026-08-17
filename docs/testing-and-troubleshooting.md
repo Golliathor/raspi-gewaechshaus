@@ -144,6 +144,24 @@ Mögliche Ursachen:
 `last_safety_overrides` im Dashboard oder in `control_decisions.csv` nennen
 den konkreten Grund.
 
+## Wasserimpuls endet früher als eingestellt
+
+Die eingetragene Gießdauer ist eine Anforderung, keine Umgehung der
+Sicherheitslimits. Die ausgeführte Dauer ist das Minimum aus Anforderung,
+maximalem Einzelimpuls und verbleibendem Tageslimit. Wenn beispielsweise stets
+100 statt 600 Sekunden geschaltet werden, steht der maximale Impuls oder die
+verbleibende Tagesdauer auf 100 Sekunden.
+
+Auf der Konfigurationsseite im gemeinsamen Abschnitt „Bewässerung“ prüfen:
+
+- Legacy-/manuelle Gießdauer,
+- maximaler Wasserimpuls,
+- maximale Bewässerung pro Tag.
+
+Das Dashboard zeigt die aktuelle Kapazität sowie angeforderte und ausgeführte
+Dauer getrennt. Das Tageskonto wird um Mitternacht zurückgesetzt und liegt im
+`control_runtime` von `state.json`.
+
 ## Kamera zeigt falsches Datum oder kein Bild
 
 ```bash
