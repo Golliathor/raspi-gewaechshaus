@@ -24,10 +24,17 @@ SensorSnapshot ──> Controller.decide(...) ──> angeforderte Entscheidung
 
 | Prozess | Aufgabe | Intervall |
 | --- | --- | --- |
-| `klima_logger.py` | DHT22 lesen und `klima.csv` schreiben | 60 s, fest im Code |
+| `klima_logger.py` | DHT22 lesen, CSV-Historie und atomaren Live-Snapshot schreiben | 60 s, fest im Code |
 | `web/automation_daemon.py` | Sensoren, Wetter, Controller, Safety, Relais, Logs | Regelzyklus standardmäßig 5 s |
 | `web/camera_daemon.py` | drei geplante Bilder pro Tag | Prüfung alle 20 s |
 | `web/app.py` | Dashboard, Konfiguration, API, Downloads | HTTP Port 8080 |
+
+Der DHT-Logger schreibt jeden erfolgreichen Messwert weiterhin nach
+`logs/klima.csv` und ersetzt zusätzlich `web/latest_climate.json` atomar. Der
+Automationsdaemon liest ausschließlich diese kleine Live-Datei. Falls sie beim
+Start noch fehlt, behält er den letzten Klimawert aus `state.json`; dessen
+alter Zeitstempel löst bei Bedarf weiterhin unverändert die Stale-Safety aus.
+Die wachsende historische Klimadatei wird nicht mehr im Regelzyklus geöffnet.
 
 Der Daemon liest die lokalen ADC-Sensoren nur alle
 `sensor_read_interval_seconds`, verwendet dazwischen aber den aktuellen
@@ -70,8 +77,9 @@ Diese Methode führt keine GPIO-, Datei- oder Netzwerkzugriffe aus.
 7. `ControlEngine` startet Wasserimpulse nicht blockierend und berechnet
    Zustandsübergänge.
 8. Der Hardwareadapter schreibt die Relaiszustände.
-9. Snapshot, Entscheidung, Ereignisse und wiederherstellbarer Zustand werden
-   gespeichert.
+9. Snapshot und Entscheidung werden lokal in CSV gespeichert.
+10. Dieselben Domänenobjekte werden optional und nicht blockierend für
+    InfluxDB eingereiht; danach wird der wiederherstellbare Zustand gespeichert.
 
 Das Ventil wird über `watering_until` beendet. Der Regelzyklus blockiert
 während einer Bewässerung nicht. Der modellspezifische Bewässerungs-Cooldown
@@ -149,6 +157,8 @@ Safety-Eingriffe erscheinen als maschinenlesbare Codes.
 | `greenhouse.hardware` | Relais- und ADS1115-Adapter |
 | `greenhouse.weather` | Wetterclient und Cache |
 | `greenhouse.records` | kanonische CSV-Serialisierung |
+| `greenhouse.influx` | Line Protocol, Batching und fehlertoleranter HTTP-Writer |
+| `greenhouse.logtail` | rückwärts lesender CSV-Tail für große Laufzeitlogs |
 | `greenhouse.metrics` | getrennte Klima- und Ressourcenkennzahlen |
 | `greenhouse.importer` | Import älterer Logs |
 | `greenhouse.replay` | deterministische Wiedergabe |

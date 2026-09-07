@@ -53,6 +53,22 @@ Die folgenden alten Top-Level-Schlüssel gehören ausschließlich zum
 | `daily_summary_cache_max_age_seconds` | `300` | Cachealter der Tagesübersicht |
 | `daily_summary_row_safety_factor` | `2` | Reserve beim begrenzten Loglesen |
 
+## InfluxDB-Telemetrie
+
+| Schlüssel | Standard | Bedeutung |
+| --- | --- | --- |
+| `influxdb.enabled` | `false` | zusätzliche zentrale Speicherung aktivieren |
+| `influxdb.url` | `http://100.88.152.72:8086` | InfluxDB-2-Basisadresse |
+| `influxdb.org` | `greenhouse` | Organisation |
+| `influxdb.bucket` | `greenhouse` | Ziel-Bucket |
+| `influxdb.token_file` | `/etc/gewaechshaus/influx-token` | Datei mit reinem Write-Token |
+| `influxdb.timeout_seconds` | `3` | kurzer HTTP-Timeout, maximal 30 s |
+| `influxdb.source` | `growpi` | stabile Gerätekennung für Tags |
+
+Der Token selbst ist kein Konfigurationswert. Einrichtung, Messschema,
+Ausfallverhalten und Prüfquery stehen in
+[InfluxDB-2-Telemetrie](influxdb.md).
+
 ## ADC und Filter
 
 | Schlüssel | Standard | Bedeutung |

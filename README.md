@@ -54,13 +54,14 @@ Für Dauerbetrieb wird systemd empfohlen.
 ## Systemüberblick
 
 ```text
-DHT22 ──> klima_logger.py ──> klima.csv ─┐
-ADS1115 ──────────────────────────────────┼─> automation_daemon.py
-Open-Meteo ───────────────────────────────┘          │
+DHT22 ──> klima_logger.py ──> latest_climate.json ─┐
+                         └──> klima.csv (Historie) │
+ADS1115 ────────────────────────────────────────────┼─> automation_daemon.py
+Open-Meteo ─────────────────────────────────────────┘          │
                                                     v
                 SensorSnapshot -> Controller -> Safety-Layer
                                                     │
-                                      Relais + Zustands-/Versuchslogs
+                         Relais + CSV-Logs + optionale InfluxDB-Telemetrie
                                                     │
                                                     v
                                           Flask-Dashboard :8080
@@ -78,6 +79,7 @@ Tests laufen deshalb auch auf einem Entwicklungsrechner.
 - [Vollständige Konfigurationsreferenz](docs/configuration.md)
 - [Weboberfläche, API, Logs und laufender Betrieb](docs/operations.md)
 - [Replay, Import und Modellvergleich](docs/replay-and-evaluation.md)
+- [InfluxDB-2-Telemetrie und Grafana-Datenmodell](docs/influxdb.md)
 - [Tests und Fehlerdiagnose](docs/testing-and-troubleshooting.md)
 - [Entwicklung und neue Controller](docs/development.md)
 
@@ -116,6 +118,7 @@ Unterhalb der Datenwurzel liegen:
 ```text
 web/config.json       gemeinsame Konfiguration
 web/state.json        flüchtiger und wiederherstellbarer Laufzeitzustand
+web/latest_climate.json letzter gültiger DHT22-Messwert
 web/command.json      kurzlebige Befehlsübergabe vom Web zum Daemon
 logs/                 Klima-, Sensor-, Aktions- und Entscheidungslogs
 images/               Zeitraffer- und aktuelles Kamerabild

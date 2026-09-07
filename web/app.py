@@ -7,7 +7,6 @@ import sys
 import tempfile
 import zipfile
 from datetime import datetime
-from collections import deque
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -25,6 +24,7 @@ from greenhouse.config import (
     validate_config,
 )
 from greenhouse.controllers import registered_controller_ids
+from greenhouse.logtail import tail_csv_source
 
 app = Flask(__name__)
 
@@ -49,6 +49,7 @@ TEST_IMAGE_PATH = str(PATHS.images_dir / "test_capture.jpg")
 CONFIG_LOG_PATH = str(PATHS.logs_dir / "config_aenderungen.csv")
 ACTION_LOG_PATH = str(PATHS.action_log_path)
 DAILY_SUMMARY_JSON_PATH = str(PATHS.logs_dir / "daily_summary.json")
+_CHART_CACHE = {"climate": None, "sensor": None}
 
 
 def load_json(path, default=None):
@@ -310,33 +311,46 @@ def normalize_row(row):
     return None
 
 
-def read_csv_rows(limit=None):
-    if not os.path.exists(CSV_PATH):
+def read_csv_dicts(path, limit=None):
+    if not os.path.exists(path):
         return []
+
+    if limit is not None:
+        try:
+            return list(csv.DictReader(tail_csv_source(path, limit)))
+        except Exception:
+            return []
+
+    try:
+        with open(path, "r", encoding="utf-8", newline="") as handle:
+            return list(csv.DictReader(handle))
+    except Exception:
+        return []
+
+
+def read_csv_rows(limit=None):
+    source_rows = read_csv_dicts(CSV_PATH, limit)
 
     rows = []
     try:
-        with open(CSV_PATH, "r", encoding="utf-8", newline="") as f:
-            if limit is None:
-                source_rows = csv.DictReader(f)
-            else:
-                header = f.readline()
-                last_lines = deque(f, maxlen=limit)
-                source_rows = csv.DictReader([header] + list(last_lines))
-
-            for row in source_rows:
-                normalized = normalize_row(row)
-                if normalized:
-                    rows.append(normalized)
+        for row in source_rows:
+            normalized = normalize_row(row)
+            if normalized:
+                rows.append(normalized)
     except Exception:
         return []
 
     return rows
 
 
-def read_latest_values():
-    rows = read_csv_rows(limit=1)
-    if not rows:
+def read_latest_values(state=None):
+    runtime_state = state if isinstance(state, dict) else load_state()
+    normalized = normalize_row(runtime_state.get("climate", {}))
+    if normalized is None:
+        normalized = normalize_row(
+            load_json(str(PATHS.latest_climate_path), {})
+        )
+    if normalized is None:
         return {
             "timestamp": None,
             "temperature_c": None,
@@ -344,53 +358,73 @@ def read_latest_values():
             "label": None,
         }
 
-    row = rows[-1]
     return {
-        "timestamp": row["timestamp_iso"],
-        "temperature_c": row["temperature_c"],
-        "humidity_percent": row["humidity_percent"],
-        "label": row["label"],
+        "timestamp": normalized["timestamp_iso"],
+        "temperature_c": normalized["temperature_c"],
+        "humidity_percent": normalized["humidity_percent"],
+        "label": normalized["label"],
     }
 
 
+def normalize_chart_points(points):
+    try:
+        return max(0, int(points))
+    except (TypeError, ValueError):
+        return 200
+
+
+def csv_signature(path):
+    try:
+        stat = os.stat(path)
+        return stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size
+    except OSError:
+        return 0, 0, 0, 0
+
+
 def build_chart_data(points):
+    points = normalize_chart_points(points)
+    signature = csv_signature(CSV_PATH)
+    cached = _CHART_CACHE.get("climate")
+    if (
+        isinstance(cached, dict)
+        and cached.get("points") == points
+        and cached.get("signature") == signature
+    ):
+        return cached["data"]
     rows = read_csv_rows(limit=points)
-    return {
+    data = {
         "labels": [r["label"] for r in rows],
         "temperature": [r["temperature_c"] for r in rows],
         "humidity": [r["humidity_percent"] for r in rows],
     }
+    _CHART_CACHE["climate"] = {
+        "points": points,
+        "signature": signature,
+        "data": data,
+    }
+    return data
 
 
 def read_sensor_csv_rows(limit=None):
-    if not os.path.exists(SENSOR_CSV_PATH):
-        return []
+    source_rows = read_csv_dicts(SENSOR_CSV_PATH, limit)
 
     rows = []
     try:
-        with open(SENSOR_CSV_PATH, "r", encoding="utf-8", newline="") as f:
-            if limit is None:
-                source_rows = csv.DictReader(f)
-            else:
-                header = f.readline()
-                last_lines = deque(f, maxlen=limit)
-                source_rows = csv.DictReader([header] + list(last_lines))
+        for row in source_rows:
+            ts = parse_timestamp(row.get("timestamp"))
+            if not ts:
+                continue
 
-            for row in source_rows:
-                ts = parse_timestamp(row.get("timestamp"))
-                if not ts:
-                    continue
-
-                rows.append({
-                    "timestamp": ts,
-                    "label": ts.strftime("%d.%m. %H:%M"),
-                    "soil1": parse_float(row.get("soil1_percent")),
-                    "soil2": parse_float(row.get("soil2_percent")),
-                    "soil3": parse_float(row.get("soil3_percent")),
-                    "light": parse_float(row.get("light_percent")),
-                    "light_raw": parse_float(row.get("light_raw")),
-                    "light_class": row.get("light_class"),
-                })
+            rows.append({
+                "timestamp": ts,
+                "label": ts.strftime("%d.%m. %H:%M"),
+                "soil1": parse_float(row.get("soil1_percent")),
+                "soil2": parse_float(row.get("soil2_percent")),
+                "soil3": parse_float(row.get("soil3_percent")),
+                "light": parse_float(row.get("light_percent")),
+                "light_raw": parse_float(row.get("light_raw")),
+                "light_class": row.get("light_class"),
+            })
     except Exception:
         return []
 
@@ -398,8 +432,17 @@ def read_sensor_csv_rows(limit=None):
 
 
 def build_sensor_chart_data(points):
+    points = normalize_chart_points(points)
+    signature = csv_signature(SENSOR_CSV_PATH)
+    cached = _CHART_CACHE.get("sensor")
+    if (
+        isinstance(cached, dict)
+        and cached.get("points") == points
+        and cached.get("signature") == signature
+    ):
+        return cached["data"]
     rows = read_sensor_csv_rows(limit=points)
-    return {
+    data = {
         "labels": [r["label"] for r in rows],
         "soil1": [r["soil1"] for r in rows],
         "soil2": [r["soil2"] for r in rows],
@@ -408,34 +451,31 @@ def build_sensor_chart_data(points):
         "light_raw": [r["light_raw"] for r in rows],
         "light_class": [r["light_class"] for r in rows],
     }
+    _CHART_CACHE["sensor"] = {
+        "points": points,
+        "signature": signature,
+        "data": data,
+    }
+    return data
 
 
 def read_action_rows(limit=None):
-    if not os.path.exists(ACTION_LOG_PATH):
-        return []
+    source_rows = read_csv_dicts(ACTION_LOG_PATH, limit)
 
     rows = []
 
     try:
-        with open(ACTION_LOG_PATH, "r", encoding="utf-8", newline="") as f:
-            if limit is None:
-                source_rows = csv.DictReader(f)
-            else:
-                header = f.readline()
-                last_lines = deque(f, maxlen=limit)
-                source_rows = csv.DictReader([header] + list(last_lines))
+        for row in source_rows:
+            ts = parse_timestamp(row.get("timestamp"))
+            if not ts:
+                continue
 
-            for row in source_rows:
-                ts = parse_timestamp(row.get("timestamp"))
-                if not ts:
-                    continue
-
-                rows.append({
-                    "timestamp": ts,
-                    "event": row.get("event", ""),
-                    "source": row.get("source", ""),
-                    "details": row.get("details", ""),
-                })
+            rows.append({
+                "timestamp": ts,
+                "event": row.get("event", ""),
+                "source": row.get("source", ""),
+                "details": row.get("details", ""),
+            })
 
     except Exception:
         return []
@@ -830,11 +870,22 @@ def config_page():
             if value is not None:
                 config["controllers"]["adaptive_weather"][key] = value
 
+        config["influxdb"]["enabled"] = (
+            form.get("influxdb_enabled") == "on"
+        )
+        for key in ("url", "org", "bucket", "token_file", "source"):
+            config["influxdb"][key] = form.get(
+                f"influxdb_{key}", config["influxdb"][key]
+            ).strip()
+        influx_timeout = parse_float(form.get("influxdb_timeout_seconds"))
+        if influx_timeout is not None:
+            config["influxdb"]["timeout_seconds"] = influx_timeout
+
         try:
             save_config(config, old_config)
         except ValueError as error:
             state = load_state()
-            latest = read_latest_values()
+            latest = read_latest_values(state)
             return render_template(
                 "config.html",
                 config=config,
@@ -846,7 +897,7 @@ def config_page():
         return redirect(url_for("config_page"))
 
     state = load_state()
-    latest = read_latest_values()
+    latest = read_latest_values(state)
 
     return render_template(
         "config.html",
@@ -868,7 +919,7 @@ def calibration_page():
 def api_status():
     config = load_config()
     state = load_state()
-    latest = read_latest_values()
+    latest = read_latest_values(state)
     latest_image = get_latest_image_info()
 
     return jsonify({

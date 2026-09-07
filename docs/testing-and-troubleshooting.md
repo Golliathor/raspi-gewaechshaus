@@ -24,6 +24,8 @@ Die Tests decken unter anderem ab:
 - Wetterclient, Cache und Fallback,
 - ADC-Median und EMA-Filter,
 - Replay-Reproduzierbarkeit und Kennzahlen,
+- Influx-Line-Protocol, Originalzeitstempel und Ausfallisolation,
+- atomarer Klima-Live-Snapshot, CSV-Tail-Reader und Chart-Cache,
 - Webkonfiguration, Status-API und Befehle.
 
 Syntax- und JSON-Prüfung:
@@ -48,6 +50,22 @@ Vor Automatikbetrieb:
 8. Kamera-Testaufnahme hat korrektes Datum.
 9. Wetterkarte zeigt bei aktiviertem Wetter aktuelle Werte und Vorhersage.
 10. Erst danach Automatik aktivieren und `actions.csv` beobachten.
+11. Bei aktivierter Influx-Telemetrie `sensor` und `control` mit der Query aus
+    [InfluxDB-2-Telemetrie](influxdb.md) prüfen.
+
+## InfluxDB bleibt leer
+
+Die Steuerung muss dabei unverändert weiterlaufen. Prüfen:
+
+- Servergesundheit mit `curl -s http://100.88.152.72:8086/health`,
+- `influxdb.enabled`, URL, Organisation und Bucket,
+- Lesbarkeit der Token-Datei als systemd-Benutzer,
+- reine Schreibberechtigung des Tokens auf den Bucket `greenhouse`,
+- `influx_*`-Einträge in `logs/actions.csv`,
+- korrekte Systemzeit und Zeitzone.
+
+Nach Erstellen oder Ersetzen der Token-Datei den Automationsdienst neu starten.
+Der Token wird absichtlich niemals in Diagnosemeldungen ausgegeben.
 
 ## Bodenfeuchte schwankt stark
 
@@ -98,12 +116,33 @@ Messwert. Der Safety-Layer verhindert dann Bewässerung.
 
 ```bash
 tail -n 5 "$GREENHOUSE_BASE_DIR/logs/klima.csv"
+cat "$GREENHOUSE_BASE_DIR/web/latest_climate.json"
 systemctl status greenhouse-climate
 ```
 
 Zeitstempel, DHT-Verkabelung an GPIO 4 und Dienstlog prüfen. Bei ungültigen
 Luftwerten fordert der Safety-Layer beide Lüfter AUS. Bei veraltetem Snapshot
 wird zuerst Bewässerung, später auch Lüftung abgeschaltet.
+
+Der Automationsdaemon durchsucht `klima.csv` nicht mehr. Fehlt
+`latest_climate.json`, zuerst `greenhouse-climate.service` neu starten. Nach
+einer erfolgreichen DHT22-Messung muss die Datei innerhalb des
+60-Sekunden-Messintervalls erscheinen.
+
+## Hohe CPU-Last
+
+Nach Update und Neustart mindestens zwei Minuten warten und prüfen:
+
+```bash
+top
+ps -eo pid,comm,%cpu,%mem,etime --sort=-%cpu | head -20
+```
+
+Der Automationsdaemon darf nicht dauerhaft durch das Lesen von `klima.csv`
+auffallen. Wiederholte Aufrufe von `/api/status`, `/api/chart` und
+`/api/sensor_chart` dürfen ebenfalls keine vollständigen Logscans mehr
+auslösen. Kurzzeitige Lastspitzen durch Kameraaufnahme, DHT-Zugriff oder die
+periodische Tagesauswertung getrennt beurteilen.
 
 ## Wetter fehlt
 

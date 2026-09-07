@@ -52,6 +52,74 @@ class WebTests(unittest.TestCase):
         self.assertIn("weather_available", data)
         self.assertIn("last_weather_error", data)
 
+    def test_status_uses_runtime_snapshot_without_scanning_climate_csv(self) -> None:
+        self.app_module.save_json(
+            self.app_module.PATHS.state_path,
+            {
+                "climate": {
+                    "timestamp": "2026-09-08T00:45:00",
+                    "temperature_c": 23.4,
+                    "humidity_percent": 91.2,
+                }
+            },
+        )
+        with patch.object(
+            self.app_module,
+            "read_csv_rows",
+            side_effect=AssertionError("status must not scan klima.csv"),
+        ):
+            response = self.client.get("/api/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["latest"],
+            {
+                "timestamp": "2026-09-08T00:45:00",
+                "temperature_c": 23.4,
+                "humidity_percent": 91.2,
+                "label": "08.09. 00:45",
+            },
+        )
+
+    def test_chart_endpoints_tail_logs_and_cache_unchanged_files(self) -> None:
+        self.app_module.PATHS.climate_csv_path.write_text(
+            "timestamp,temperature_c,humidity_percent\n"
+            "2026-09-08T00:43:00,21.0,80.0\n"
+            "2026-09-08T00:44:00,22.0,81.0\n"
+            "2026-09-08T00:45:00,23.0,82.0\n",
+            encoding="utf-8",
+        )
+        self.app_module.PATHS.sensor_csv_path.write_text(
+            "timestamp,soil1_percent,soil2_percent,soil3_percent,"
+            "light_percent,light_raw,light_class\n"
+            "2026-09-08T00:44:00,40,,,60,1000,hell\n"
+            "2026-09-08T00:45:00,41,,,61,990,hell\n",
+            encoding="utf-8",
+        )
+
+        with patch.object(
+            self.app_module,
+            "read_csv_dicts",
+            wraps=self.app_module.read_csv_dicts,
+        ) as reader:
+            first_climate = self.client.get("/api/chart?points=2")
+            second_climate = self.client.get("/api/chart?points=2")
+            first_sensor = self.client.get("/api/sensor_chart?points=1")
+            second_sensor = self.client.get("/api/sensor_chart?points=1")
+            with self.app_module.PATHS.climate_csv_path.open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write("2026-09-08T00:46:00,24.0,83.0\n")
+            updated_climate = self.client.get("/api/chart?points=2")
+
+        self.assertEqual(first_climate.status_code, 200)
+        self.assertEqual(first_climate.get_json(), second_climate.get_json())
+        self.assertEqual(first_climate.get_json()["temperature"], [22.0, 23.0])
+        self.assertEqual(first_sensor.get_json(), second_sensor.get_json())
+        self.assertEqual(first_sensor.get_json()["soil1"], [41.0])
+        self.assertEqual(updated_climate.get_json()["temperature"], [23.0, 24.0])
+        self.assertEqual(reader.call_count, 3)
+
     def test_dashboard_exposes_model_kpis_and_explanations(self) -> None:
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
@@ -168,6 +236,9 @@ class WebTests(unittest.TestCase):
             b'name="adaptive_weather_weather_max_age_seconds"',
             response.data,
         )
+        self.assertIn(b'name="influxdb_enabled"', response.data)
+        self.assertIn(b'name="influxdb_url"', response.data)
+        self.assertIn(b'name="influxdb_token_file"', response.data)
         self.assertEqual(
             response.data.count(b'name="safety_max_watering_pulse_seconds"'),
             1,
@@ -192,6 +263,13 @@ class WebTests(unittest.TestCase):
                 "weather_latitude": "52.52",
                 "weather_longitude": "13.405",
                 "adaptive_weather_weather_max_age_seconds": "1800",
+                "influxdb_enabled": "on",
+                "influxdb_url": "http://influx.internal:8086",
+                "influxdb_org": "greenhouse",
+                "influxdb_bucket": "greenhouse-test",
+                "influxdb_token_file": "/etc/gewaechshaus/influx-token",
+                "influxdb_timeout_seconds": "2.5",
+                "influxdb_source": "growpi-test",
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -213,6 +291,13 @@ class WebTests(unittest.TestCase):
             ],
             1800,
         )
+        self.assertTrue(saved["influxdb"]["enabled"])
+        self.assertEqual(
+            saved["influxdb"]["url"], "http://influx.internal:8086"
+        )
+        self.assertEqual(saved["influxdb"]["bucket"], "greenhouse-test")
+        self.assertEqual(saved["influxdb"]["timeout_seconds"], 2.5)
+        self.assertEqual(saved["influxdb"]["source"], "growpi-test")
 
     def test_manual_watering_api_reports_safety_limit(self) -> None:
         config = self.app_module.load_config()

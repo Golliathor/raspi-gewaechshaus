@@ -98,6 +98,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "request_timeout_seconds": 10,
         "base_url": "https://api.open-meteo.com/v1/forecast",
     },
+    "influxdb": {
+        "enabled": False,
+        "url": "http://100.88.152.72:8086",
+        "org": "greenhouse",
+        "bucket": "greenhouse",
+        "token_file": "/etc/gewaechshaus/influx-token",
+        "timeout_seconds": 3.0,
+        "source": "growpi",
+    },
     "controller": {
         "active": "adaptive_weather",
         "history_size": 720,
@@ -229,6 +238,10 @@ class ProjectPaths:
     @property
     def state_path(self) -> Path:
         return self.web_dir / "state.json"
+
+    @property
+    def latest_climate_path(self) -> Path:
+        return self.web_dir / "latest_climate.json"
 
     @property
     def command_path(self) -> Path:
@@ -650,6 +663,31 @@ def validate_config(config: Mapping[str, Any]) -> list[str]:
                 )
         except (KeyError, TypeError, ValueError):
             errors.append("weather.longitude muss für Wetterabrufe gesetzt sein")
+
+    influxdb = config.get("influxdb", {})
+    if not isinstance(influxdb, Mapping):
+        errors.append("influxdb muss ein Objekt sein")
+    else:
+        if not isinstance(influxdb.get("enabled"), bool):
+            errors.append("influxdb.enabled muss true oder false sein")
+        influx_url = str(influxdb.get("url", ""))
+        if (
+            not influx_url.startswith(("http://", "https://"))
+            or not influx_url.split("://", 1)[-1].strip("/")
+        ):
+            errors.append("influxdb.url muss eine HTTP- oder HTTPS-URL sein")
+        for key in ("org", "bucket", "token_file", "source"):
+            if not str(influxdb.get(key, "")).strip():
+                errors.append(f"influxdb.{key} muss gesetzt sein")
+        try:
+            influx_timeout = float(influxdb["timeout_seconds"])
+            if not 0 < influx_timeout <= 30:
+                errors.append(
+                    "influxdb.timeout_seconds muss größer als 0 und "
+                    "höchstens 30 sein"
+                )
+        except (KeyError, TypeError, ValueError):
+            errors.append("influxdb.timeout_seconds muss eine Zahl sein")
 
     safety = config.get("safety", {})
     try:

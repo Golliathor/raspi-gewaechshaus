@@ -96,10 +96,19 @@ curl -X POST http://localhost:8080/api/automation/toggle \
 | --- | --- |
 | `web/config.json` | persistente Konfiguration |
 | `web/state.json` | Zustände, letzte Werte, Wettercache, Regelzustand |
+| `web/latest_climate.json` | letzter gültiger DHT22-Wert, atomar ersetzt |
 | `web/command.json` | genau ein noch nicht verarbeiteter Web-Befehl |
 
 `state.json` wird von Automations- und Kameradaemon verwendet. Schreibvorgänge
 erfolgen über temporäre Datei und atomisches Ersetzen.
+
+`/api/status` liest das aktuelle Klima aus `state.json`, bei noch fehlendem
+Zustand direkt aus `latest_climate.json`, und scannt keine historische
+CSV-Datei. `/api/chart` und `/api/sensor_chart` lesen rückwärts nur die
+angeforderte Zahl physischer CSV-Zeilen. Solange Dateiidentität, Größe und
+Änderungszeit gleich bleiben, wird die bereits aufbereitete Chartantwort im
+Webprozess wiederverwendet. Neue Logzeilen machen den jeweiligen Cache
+automatisch ungültig.
 
 ## Logdateien
 
@@ -112,6 +121,12 @@ erfolgen über temporäre Datei und atomisches Ersetzen.
 | `logs/control_decisions.csv` | Anforderung, Anwendung, Gründe, Diagnosen |
 | `logs/config_aenderungen.csv` | alter und neuer Konfigurationswert |
 | `logs/daily_summary.json` | Cache der Dashboard-Tagesauswertung |
+
+Zusätzlich kann der Automationsdaemon `sensor`, `control` und `event` in
+InfluxDB 2 schreiben. Das geschieht erst nach den lokalen CSV-Schreibvorgängen.
+`influx_disabled`, `influx_write_failed`, `influx_write_recovered` und
+`influx_queue_full` in `actions.csv` beschreiben den Zustand dieser optionalen
+Telemetrie. Details und Aktivierung: [InfluxDB-2-Telemetrie](influxdb.md).
 
 ### `sensoren.csv`
 

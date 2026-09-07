@@ -16,6 +16,15 @@
     "request_timeout_seconds": 10,
     "base_url": "https://api.open-meteo.com/v1/forecast"
   },
+  "influxdb": {
+    "enabled": false,
+    "url": "http://100.88.152.72:8086",
+    "org": "greenhouse",
+    "bucket": "greenhouse",
+    "token_file": "/etc/gewaechshaus/influx-token",
+    "timeout_seconds": 3.0,
+    "source": "growpi"
+  },
   "controller": {
     "active": "adaptive_weather",
     "history_size": 720

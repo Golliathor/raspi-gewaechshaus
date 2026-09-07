@@ -21,7 +21,13 @@ from greenhouse.hardware import (
     ADS1115Reader,
     RaspberryPiRelayOutput,
 )
-from greenhouse.models import ActuatorState, SensorSnapshot, WeatherSnapshot
+from greenhouse.influx import InfluxTelemetry
+from greenhouse.models import (
+    ActuatorState,
+    CycleResult,
+    SensorSnapshot,
+    WeatherSnapshot,
+)
 from greenhouse.records import append_decision, append_snapshot
 from greenhouse.runtime import ControlEngine
 from greenhouse.weather import (
@@ -57,6 +63,34 @@ def log_action(event: str, details: str = "", source: str = "automation") -> Non
             "details": details,
         },
     )
+
+
+def record_cycle(
+    result: CycleResult,
+    telemetry: InfluxTelemetry,
+    config: dict[str, Any],
+) -> None:
+    """Persist the authoritative CSV records before optional telemetry."""
+
+    append_snapshot(PATHS.snapshot_log_path, result.snapshot)
+    append_decision(PATHS.decision_log_path, result, RUN_ID)
+    try:
+        telemetry.submit_cycle(
+            result,
+            RUN_ID,
+            float(config.get("water_flow_ml_per_second", 0.0)),
+        )
+    except Exception as error:
+        # This outer guard deliberately protects the control process even if a
+        # future telemetry implementation violates its no-raise contract.
+        try:
+            log_action(
+                "influx_submit_failed",
+                type(error).__name__,
+                source="influxdb",
+            )
+        except Exception:
+            pass
 
 
 def parse_float(value: Any) -> float | None:
@@ -105,17 +139,19 @@ def normalize_climate_row(row: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def read_latest_climate() -> dict[str, Any]:
-    latest = None
-    try:
-        with PATHS.climate_csv_path.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                normalized = normalize_climate_row(row)
-                if normalized is not None:
-                    latest = normalized
-    except OSError:
-        pass
-    return latest or {
+def read_latest_climate(
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    current = load_json(PATHS.latest_climate_path, None)
+    if isinstance(current, dict):
+        normalized = normalize_climate_row(current)
+        if normalized is not None:
+            return normalized
+    if isinstance(fallback, dict):
+        normalized = normalize_climate_row(fallback)
+        if normalized is not None:
+            return normalized
+    return {
         "timestamp": None,
         "temperature_c": None,
         "humidity_percent": None,
@@ -590,6 +626,11 @@ def main() -> None:
     weather_service: CachedWeatherProvider | None = None
     weather_signature: str | None = None
     last_weather_error: str | None = state.get("last_weather_error")
+    influx = InfluxTelemetry.from_config(
+        {"influxdb": {"enabled": False}},
+        start_worker=False,
+    )
+    influx_signature: str | None = None
 
     try:
         while True:
@@ -610,6 +651,37 @@ def main() -> None:
                 engine.config = config
 
             config, state = handle_command(config, state, engine, now)
+            current_influx_signature = json.dumps(
+                config.get("influxdb", {}),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if current_influx_signature != influx_signature:
+                previous_influx = influx
+                try:
+                    influx = InfluxTelemetry.from_config(
+                        config,
+                        status_callback=lambda event, details: log_action(
+                            event,
+                            details,
+                            source="influxdb",
+                        ),
+                    )
+                except Exception as error:
+                    influx = InfluxTelemetry.from_config(
+                        {"influxdb": {"enabled": False}},
+                        start_worker=False,
+                    )
+                    try:
+                        log_action(
+                            "influx_disabled",
+                            f"initialization_failed ({type(error).__name__})",
+                            source="influxdb",
+                        )
+                    except Exception:
+                        pass
+                influx_signature = current_influx_signature
+                previous_influx.close(timeout_seconds=0.0)
             current_weather_signature = json.dumps(
                 config.get("weather", {}),
                 sort_keys=True,
@@ -639,7 +711,7 @@ def main() -> None:
                 last_sensor_read_at = now
                 append_sensor_log(now, soil_sensors, light_sensor)
 
-            climate = read_latest_climate()
+            climate = read_latest_climate(state.get("climate"))
             snapshot = build_snapshot(
                 now,
                 climate,
@@ -664,8 +736,7 @@ def main() -> None:
                 watering_check_due=watering_due,
             )
             relay_output.set_state(result.state)
-            append_snapshot(PATHS.snapshot_log_path, result.snapshot)
-            append_decision(PATHS.decision_log_path, result, RUN_ID)
+            record_cycle(result, influx, config)
 
             for transition in result.transitions:
                 log_action("actuator_transition", transition)
@@ -717,6 +788,7 @@ def main() -> None:
             time.sleep(float(config.get("control_loop_interval_seconds", 5)))
     finally:
         relay_output.all_off()
+        influx.close(timeout_seconds=1.0)
 
 
 if __name__ == "__main__":

@@ -19,9 +19,14 @@ images/
 
 # Runtime files
 web/state.json
+web/latest_climate.json
 
 # Config (optional)
 web/config.json
+.env
+*.token
+influx-token
+secrets/
 
 # Versionierte Test- und Beispieldateien
 !tests/fixtures/*.csv
