@@ -80,6 +80,36 @@ class ComparisonControllerTests(unittest.TestCase):
             any("baseline_hysteresis" in error for error in errors)
         )
 
+    def test_hysteresis_baseline_repeats_dry_pulse_after_cooldown(self) -> None:
+        controller_config = self.config["controllers"]["baseline_hysteresis"]
+        controller_config["watering_seconds"] = 10
+        controller_config["watering_cooldown_seconds"] = 60
+        engine = ControlEngine(
+            create_controller("baseline_hysteresis"), self.config
+        )
+        dry = SensorSnapshot(NOW, 20, 40, (20, None, None), 0)
+
+        first = engine.step(dry, now=NOW, watering_check_due=True)
+        during = engine.step(
+            SensorSnapshot(
+                NOW + timedelta(seconds=11), 20, 40, (20, None, None), 0
+            ),
+            now=NOW + timedelta(seconds=11),
+            watering_check_due=True,
+        )
+        after = engine.step(
+            SensorSnapshot(
+                NOW + timedelta(seconds=71), 20, 40, (20, None, None), 0
+            ),
+            now=NOW + timedelta(seconds=71),
+            watering_check_due=True,
+        )
+
+        self.assertEqual(first.watering_started_seconds, 10)
+        self.assertEqual(during.watering_started_seconds, 0)
+        self.assertIn("watering_blocked_cooldown", during.requested.reasons)
+        self.assertEqual(after.watering_started_seconds, 10)
+
 
 if __name__ == "__main__":
     unittest.main()

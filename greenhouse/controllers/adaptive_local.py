@@ -115,8 +115,17 @@ class AdaptiveLocalController:
                     ),
                 },
                 "watering_armed": watering_diagnostics["watering_armed"],
+                "watering_rearm_mode": watering_diagnostics[
+                    "watering_rearm_mode"
+                ],
                 "dry_soil_sensor_indices": watering_diagnostics[
                     "dry_soil_sensor_indices"
+                ],
+                "soil_moisture_target_percent": watering_diagnostics[
+                    "soil_moisture_target_percent"
+                ],
+                "soil_moisture_target_reached": watering_diagnostics[
+                    "soil_moisture_target_reached"
                 ],
             },
             controller_state=next_controller_state,
@@ -436,17 +445,6 @@ class AdaptiveLocalController:
         now: datetime,
     ) -> tuple[float, str | None, dict[str, Any], dict[str, Any]]:
         state = dict(context.controller_state)
-        armed = bool(state.get("watering_armed", True))
-        last_watering_iso = (
-            context.last_watering_at.isoformat(timespec="seconds")
-            if context.last_watering_at
-            else None
-        )
-        if state.get("last_observed_watering_at") != last_watering_iso:
-            if last_watering_iso is not None:
-                armed = False
-            state["last_observed_watering_at"] = last_watering_iso
-
         enabled_indices = tuple(
             index
             for index, sensor in enumerate(config.get("soil_sensors", [])[:3])
@@ -458,15 +456,14 @@ class AdaptiveLocalController:
             if index < len(snapshot.soil_moisture_percent)
             and snapshot.soil_moisture_percent[index] is not None
         }
-        rearm_threshold = cls._number(
+        target_threshold = cls._number(
             controller_config, "soil_moisture_off_percent", 45.0
         )
-        if enabled_indices and all(
+        target_reached = bool(enabled_indices) and all(
             index in valid_values
-            and valid_values[index] >= rearm_threshold
+            and valid_values[index] >= target_threshold
             for index in enabled_indices
-        ):
-            armed = True
+        )
 
         dry_threshold = adaptive["effective_soil_moisture_on_percent"]
         dry_indices = tuple(
@@ -481,6 +478,14 @@ class AdaptiveLocalController:
             ),
             now,
         )
+        # Pulsbewässerung wird ausschließlich zeitlich wieder freigegeben.
+        # Persistierte watering_armed=false-Zustände aus älteren Versionen
+        # dürfen den Boden nicht dauerhaft verriegeln.
+        armed = (
+            not context.actuator_state.water_valve
+            and cooldown_remaining <= 0
+        )
+        state.pop("last_observed_watering_at", None)
         duration = 0.0
         reason: str | None = None
         if context.watering_check_due and config.get("watering_enabled", True):
@@ -492,8 +497,6 @@ class AdaptiveLocalController:
                 reason = "watering_blocked_valve_active"
             elif not dry_indices:
                 reason = "watering_hold_above_adaptive_threshold"
-            elif not armed:
-                reason = "watering_blocked_hysteresis"
             elif cooldown_remaining > 0:
                 reason = "watering_blocked_cooldown"
             else:
@@ -523,8 +526,11 @@ class AdaptiveLocalController:
             state,
             {
                 "watering_armed": armed,
+                "watering_rearm_mode": "cooldown",
                 "cooldown_remaining_seconds": cooldown_remaining,
                 "dry_soil_sensor_indices": dry_indices,
+                "soil_moisture_target_percent": target_threshold,
+                "soil_moisture_target_reached": target_reached,
             },
         )
 

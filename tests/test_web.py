@@ -76,6 +76,8 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"Gefilterter Regelwert", response.data)
         self.assertIn(b"ADC-Spanne", response.data)
         self.assertIn(b"der Safety-Layer erlaubt aktuell", response.data)
+        self.assertIn(b"Wiederfreigabemodus", response.data)
+        self.assertIn(b"Bodenfeuchteziel erreicht", response.data)
         for controller_id in (
             b"baseline_fixed",
             b"baseline_hysteresis",
@@ -171,6 +173,7 @@ class WebTests(unittest.TestCase):
             1,
         )
         self.assertIn(b"600-s-Impuls", response.data)
+        self.assertIn(b"Feuchteziel / obere Referenz", response.data)
 
         response = self.client.post(
             "/config",

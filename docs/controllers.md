@@ -45,18 +45,21 @@ Standardwerte:
 
 - Abluft: 28/25 °C, 50/40 %, mindestens 120 s EIN und 120 s AUS
 - Umluft: 24/22 °C, 45/38 %, mindestens 120 s EIN und 120 s AUS
-- Wasser: EIN bei höchstens 35 %, erneute Freigabe erst ab 45 % an allen
-  aktivierten Sensoren, zusätzlich 3600 s Sperrzeit
+- Wasser: EIN bei höchstens 35 %, 45 % als obere Zielreferenz und 3600 s
+  Sperrzeit nach Ende jedes Impulses
 
-Die Bewässerungsfreigabe wird nach einem Impuls entzogen. Sie wird erst wieder
-gesetzt, wenn alle aktivierten Bodensensoren gültig sind und mindestens die
-AUS-Grenze melden. Dieser Zustand und die letzte Bewässerung werden in
-`state.json` gesichert.
+Nach einem Impuls beginnt die Sperrzeit beim Schließen des Ventils. Danach
+wird die aktuelle Bodenfeuchte neu bewertet. Liegt sie weiterhin unter der
+EIN-Grenze, darf ein weiterer begrenzter Puls erfolgen, auch wenn die obere
+Zielreferenz nicht erreicht wurde. `watering_armed` ist deshalb nur noch eine
+Diagnose der zeitlichen Bereitschaft und keine persistente Feuchteverriegelung.
+Ein aus älteren Versionen gespeichertes `watering_armed=false` wird ignoriert.
 
 ## Ansatz A: `adaptive_local`
 
-Ansatz A übernimmt Hysterese, Mindestlaufzeiten und die Bewässerungslogik von
-Baseline 2. Zusätzlich werden lineare Trends aus der Historie berechnet.
+Ansatz A übernimmt Lüfterhysterese, Mindestlaufzeiten und die pulsweise
+Bewässerungslogik von Baseline 2. Zusätzlich werden lineare Trends aus der
+Historie berechnet.
 Standardmäßig:
 
 - Trendfenster: 15 min
@@ -119,8 +122,8 @@ Erhöhung der Gießgrenze =
   )
 ```
 
-Wenn mindestens ein Sensor die effektive Gießgrenze unterschreitet und
-Hysterese sowie Sperrzeit freigeben:
+Wenn mindestens ein Sensor die effektive Gießgrenze unterschreitet und die
+Sperrzeit abgelaufen ist:
 
 ```text
 Gießdauer =

@@ -16,6 +16,7 @@ from greenhouse.models import (
     SensorSnapshot,
     WeatherSnapshot,
 )
+from greenhouse.runtime import ControlEngine
 
 
 NOW = datetime(2026, 7, 24, 12)
@@ -191,6 +192,69 @@ class AdaptiveWeatherControllerTests(unittest.TestCase):
         self.assertGreater(critical.watering_seconds, 0)
         self.assertEqual(
             critical.diagnostics["weather_scores"]["rain_effective"], 0
+        )
+
+    def test_critical_soil_is_not_blocked_by_persisted_false_rearm(self) -> None:
+        decision = self.weather.decide(
+            snapshot(soil=19),
+            ControlContext(
+                actuator_state=ActuatorState(),
+                last_watering_at=NOW - timedelta(hours=2),
+                watering_check_due=True,
+                now=NOW,
+                controller_state={"watering_armed": False},
+            ),
+            self.config,
+        )
+
+        self.assertGreater(decision.watering_seconds, 0)
+        self.assertEqual(decision.diagnostics["watering_rearm_mode"], "cooldown")
+        self.assertNotIn("watering_blocked_hysteresis", decision.reasons)
+
+    def test_reported_persisted_state_starts_another_safe_pulse(self) -> None:
+        local_config = self.config["controllers"]["adaptive_local"]
+        local_config.update(
+            {
+                "soil_moisture_on_percent": 40,
+                "soil_moisture_off_percent": 50,
+                "watering_base_seconds": 1200,
+                "watering_min_seconds": 300,
+                "watering_max_seconds": 2400,
+                "watering_cooldown_seconds": 600,
+            }
+        )
+        self.config["safety"].update(
+            {
+                "max_watering_pulse_seconds": 1200,
+                "max_daily_watering_seconds": 7200,
+            }
+        )
+        now = datetime(2026, 9, 7, 12)
+        engine = ControlEngine(self.weather, self.config)
+        engine.restore(
+            {
+                "control_runtime": {
+                    "controller_id": "adaptive_weather",
+                    "last_watering_at": "2026-09-06T10:12:26",
+                    "controller_state": {
+                        "last_observed_watering_at": "2026-09-06T10:12:26",
+                        "watering_armed": False,
+                    },
+                }
+            }
+        )
+
+        result = engine.step(
+            SensorSnapshot(now, 25, 45, (24.3, None, None), 0),
+            now=now,
+            watering_check_due=True,
+        )
+
+        self.assertGreater(result.requested.watering_seconds, 1200)
+        self.assertEqual(result.watering_started_seconds, 1200)
+        self.assertIn("watering_pulse_limited", result.safety_overrides)
+        self.assertNotIn(
+            "watering_blocked_hysteresis", result.requested.reasons
         )
 
     def test_invalid_weather_configuration_is_reported(self) -> None:

@@ -133,7 +133,6 @@ Mögliche Ursachen:
 - `watering_enabled=false`,
 - Bewässerungsprüfung noch nicht fällig,
 - Bodenwert oberhalb der Gießgrenze,
-- Hysterese nicht wieder freigegeben,
 - Sperrzeit läuft,
 - Ventil bereits aktiv,
 - ungültiger/fehlender Bodensensor,
@@ -143,6 +142,11 @@ Mögliche Ursachen:
 `last_decision_reasons`, `lock_remaining_seconds` und
 `last_safety_overrides` im Dashboard oder in `control_decisions.csv` nennen
 den konkreten Grund.
+
+`watering_armed` beschreibt seit der cooldown-basierten Pulslogik nur die
+zeitliche Bereitschaft. Nach Ablauf der Sperrzeit wird ein persistiertes
+`false` automatisch korrigiert. Das Erreichen der oberen Bodenfeuchtereferenz
+ist für einen weiteren Impuls nicht erforderlich.
 
 ## Wasserimpuls endet früher als eingestellt
 

@@ -83,8 +83,17 @@ class BaselineHysteresisController:
                     ),
                 },
                 "watering_armed": watering_diagnostics["watering_armed"],
+                "watering_rearm_mode": watering_diagnostics[
+                    "watering_rearm_mode"
+                ],
                 "dry_soil_sensor_indices": watering_diagnostics[
                     "dry_soil_sensor_indices"
+                ],
+                "soil_moisture_target_percent": watering_diagnostics[
+                    "soil_moisture_target_percent"
+                ],
+                "soil_moisture_target_reached": watering_diagnostics[
+                    "soil_moisture_target_reached"
                 ],
                 "thresholds": self._threshold_diagnostics(controller_config),
             },
@@ -204,17 +213,6 @@ class BaselineHysteresisController:
         now: datetime,
     ) -> tuple[float, str | None, dict[str, Any], dict[str, Any]]:
         state = dict(context.controller_state)
-        armed = bool(state.get("watering_armed", True))
-        last_watering_iso = (
-            context.last_watering_at.isoformat(timespec="seconds")
-            if context.last_watering_at
-            else None
-        )
-        if state.get("last_observed_watering_at") != last_watering_iso:
-            if last_watering_iso is not None:
-                armed = False
-            state["last_observed_watering_at"] = last_watering_iso
-
         enabled_indices = tuple(
             index
             for index, sensor in enumerate(config.get("soil_sensors", [])[:3])
@@ -226,15 +224,14 @@ class BaselineHysteresisController:
             if index < len(snapshot.soil_moisture_percent)
             and snapshot.soil_moisture_percent[index] is not None
         }
-        wet_off = cls._number(
+        target_threshold = cls._number(
             controller_config, "soil_moisture_off_percent", 45.0
         )
-        all_enabled_sensors_wet = bool(enabled_indices) and all(
-            index in valid_values and valid_values[index] >= wet_off
+        target_reached = bool(enabled_indices) and all(
+            index in valid_values
+            and valid_values[index] >= target_threshold
             for index in enabled_indices
         )
-        if all_enabled_sensors_wet:
-            armed = True
 
         dry_on = cls._number(
             controller_config, "soil_moisture_on_percent", 35.0
@@ -249,6 +246,11 @@ class BaselineHysteresisController:
             cls._number(controller_config, "watering_cooldown_seconds", 3600.0),
             now,
         )
+        armed = (
+            not context.actuator_state.water_valve
+            and cooldown_remaining <= 0
+        )
+        state.pop("last_observed_watering_at", None)
         watering_seconds = 0.0
         watering_reason: str | None = None
 
@@ -261,8 +263,6 @@ class BaselineHysteresisController:
                 watering_reason = "watering_blocked_valve_active"
             elif not dry_indices:
                 watering_reason = "watering_hold_above_on_threshold"
-            elif not armed:
-                watering_reason = "watering_blocked_hysteresis"
             elif cooldown_remaining > 0:
                 watering_reason = "watering_blocked_cooldown"
             else:
@@ -279,8 +279,11 @@ class BaselineHysteresisController:
             state,
             {
                 "watering_armed": armed,
+                "watering_rearm_mode": "cooldown",
                 "cooldown_remaining_seconds": cooldown_remaining,
                 "dry_soil_sensor_indices": dry_indices,
+                "soil_moisture_target_percent": target_threshold,
+                "soil_moisture_target_reached": target_reached,
             },
         )
 

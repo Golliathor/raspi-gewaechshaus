@@ -280,7 +280,7 @@ class AdaptiveLocalControllerTests(unittest.TestCase):
         self.assertIn("exhaust_hold_on_minimum_time", held.reasons)
         self.assertFalse(hard_off.exhaust)
 
-    def test_watering_rearm_cooldown_and_state_survive_restart(self) -> None:
+    def test_watering_repeats_after_cooldown_without_reaching_target(self) -> None:
         first_engine = ControlEngine(self.controller, self.config)
         first = first_engine.step(
             snapshot(soil=(20, None, None)),
@@ -289,38 +289,36 @@ class AdaptiveLocalControllerTests(unittest.TestCase):
         )
         self.assertGreater(first.watering_started_seconds, 0)
 
-        after_pulse = NOW + timedelta(seconds=31)
-        first_engine.step(
+        pulse_completed = NOW + timedelta(
+            seconds=first.watering_started_seconds
+        )
+        after_pulse = pulse_completed + timedelta(seconds=1)
+        during_cooldown = first_engine.step(
             snapshot(soil=(20, None, None), timestamp=after_pulse),
             now=after_pulse,
+            watering_check_due=True,
+        )
+        self.assertEqual(during_cooldown.watering_started_seconds, 0)
+        self.assertIn(
+            "watering_blocked_cooldown",
+            during_cooldown.requested.reasons,
         )
         persisted = {"control_runtime": first_engine.export_state()}
         restored = ControlEngine(AdaptiveLocalController(), self.config)
         restored.restore(persisted)
 
-        after_cooldown = NOW + timedelta(seconds=3601)
-        blocked = restored.step(
+        after_cooldown = pulse_completed + timedelta(seconds=3601)
+        second = restored.step(
             snapshot(soil=(20, None, None), timestamp=after_cooldown),
             now=after_cooldown,
             watering_check_due=True,
         )
-        self.assertEqual(blocked.watering_started_seconds, 0)
-        self.assertIn("watering_blocked_hysteresis", blocked.requested.reasons)
-
-        wet_time = after_cooldown + timedelta(seconds=1)
-        restored.step(
-            snapshot(soil=(45, None, None), timestamp=wet_time),
-            now=wet_time,
-        )
-        dry_time = wet_time + timedelta(seconds=1)
-        second = restored.step(
-            snapshot(soil=(20, None, None), timestamp=dry_time),
-            now=dry_time,
-            watering_check_due=True,
-        )
         self.assertGreater(second.watering_started_seconds, 0)
+        self.assertNotIn(
+            "watering_blocked_hysteresis", second.requested.reasons
+        )
 
-    def test_manual_watering_disarms_adaptive_hysteresis(self) -> None:
+    def test_manual_watering_is_blocked_only_during_cooldown(self) -> None:
         engine = ControlEngine(self.controller, self.config)
         self.assertEqual(engine.request_manual_watering(10, NOW), 10)
         after_pulse = NOW + timedelta(seconds=11)
@@ -330,7 +328,46 @@ class AdaptiveLocalControllerTests(unittest.TestCase):
             watering_check_due=True,
         )
         self.assertFalse(engine.controller_state["watering_armed"])
-        self.assertIn("watering_blocked_hysteresis", result.requested.reasons)
+        self.assertIn("watering_blocked_cooldown", result.requested.reasons)
+
+    def test_persisted_false_watering_state_self_heals_after_cooldown(self) -> None:
+        decision = self.controller.decide(
+            snapshot(soil=(20, None, None)),
+            context(
+                last_watering_at=NOW - timedelta(hours=2),
+                watering_due=True,
+                controller_state={
+                    "last_observed_watering_at": "2026-07-24T10:00:00",
+                    "watering_armed": False,
+                },
+            ),
+            self.config,
+        )
+
+        self.assertGreater(decision.watering_seconds, 0)
+        self.assertNotIn("watering_blocked_hysteresis", decision.reasons)
+        self.assertNotIn(
+            "last_observed_watering_at", decision.controller_state
+        )
+
+    def test_wet_soil_does_not_water_after_cooldown(self) -> None:
+        decision = self.controller.decide(
+            snapshot(soil=(50, None, None)),
+            context(
+                last_watering_at=NOW - timedelta(hours=2),
+                watering_due=True,
+                controller_state={"watering_armed": False},
+            ),
+            self.config,
+        )
+
+        self.assertEqual(decision.watering_seconds, 0)
+        self.assertIn(
+            "watering_hold_above_adaptive_threshold", decision.reasons
+        )
+        self.assertTrue(
+            decision.diagnostics["soil_moisture_target_reached"]
+        )
 
     def test_safety_rejection_does_not_consume_watering_rearm(self) -> None:
         self.config["safety"]["max_daily_watering_seconds"] = 60

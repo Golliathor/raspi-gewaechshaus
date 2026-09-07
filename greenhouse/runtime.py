@@ -196,6 +196,8 @@ class ControlEngine:
         values = self.state.as_dict()
         values[name] = bool(enabled)
         if name == "water_valve" and not enabled:
+            if self.state.water_valve:
+                self.last_watering_at = now
             self.watering_until = None
         self.state = ActuatorState(**values)
         self.last_transition_at[name] = now
@@ -212,12 +214,15 @@ class ControlEngine:
             and self.watering_until is not None
             and now >= self.watering_until
         ):
+            completed_at = self.watering_until
             self.state = ActuatorState(
                 exhaust=self.state.exhaust,
                 circulation=self.state.circulation,
                 water_valve=False,
             )
             self.watering_until = None
+            # Der Cooldown beginnt nach dem Impuls, nicht bereits beim Start.
+            self.last_watering_at = completed_at
             self.last_transition_at["water_valve"] = now
             return ("water_valve:off",)
         return ()

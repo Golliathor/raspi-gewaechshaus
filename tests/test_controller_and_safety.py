@@ -185,6 +185,17 @@ class SafetyAndRuntimeTests(unittest.TestCase):
             engine.watering_until, NOW + timedelta(seconds=600)
         )
 
+    def test_watering_cooldown_reference_moves_to_pulse_completion(self) -> None:
+        engine = ControlEngine(LegacyController(), self.config)
+        engine.request_manual_watering(10, NOW)
+
+        engine.step(
+            snapshot(timestamp=NOW + timedelta(seconds=11)),
+            now=NOW + timedelta(seconds=11),
+        )
+
+        self.assertEqual(engine.last_watering_at, NOW + timedelta(seconds=10))
+
 
 if __name__ == "__main__":
     unittest.main()

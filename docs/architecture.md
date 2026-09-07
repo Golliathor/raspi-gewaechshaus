@@ -74,7 +74,10 @@ Diese Methode führt keine GPIO-, Datei- oder Netzwerkzugriffe aus.
    gespeichert.
 
 Das Ventil wird über `watering_until` beendet. Der Regelzyklus blockiert
-während einer Bewässerung nicht.
+während einer Bewässerung nicht. Der modellspezifische Bewässerungs-Cooldown
+beginnt am geplanten Ende des Impulses. Nach seinem Ablauf wird die aktuelle
+Bodenfeuchte neu bewertet; ein alter `watering_armed=false`-Zustand kann die
+Anlage nicht dauerhaft sperren.
 
 ## Sensoraufbereitung
 

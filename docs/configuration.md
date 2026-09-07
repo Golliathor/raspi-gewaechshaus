@@ -163,7 +163,10 @@ Alle Schlüssel liegen unter `controllers.baseline_hysteresis`.
 | Umluftzeiten | `circulation_min_on_seconds=120`, `circulation_min_off_seconds=120` |
 | Wasser | `soil_moisture_on_percent=35`, `soil_moisture_off_percent=45`, `watering_seconds=10`, `watering_cooldown_seconds=3600` |
 
-EIN-Werte müssen oberhalb der zugehörigen AUS-Werte liegen.
+Die Lüfter-EIN-Werte müssen oberhalb ihrer AUS-Werte liegen. Für Bodenfeuchte
+muss `soil_moisture_on_percent` unter `soil_moisture_off_percent` liegen; der
+zweite Wert ist eine obere Zielreferenz. Die erneute Pulsfreigabe hängt vom
+Cooldown ab und nicht vom Erreichen dieses Werts.
 
 ## Parameter `adaptive_local`
 
@@ -178,6 +181,9 @@ Alle Schlüssel liegen unter `controllers.adaptive_local`.
 | Licht/Klima | `light_adaptation_start_percent=50`, `light_temperature_reduction_c=1.5`, `max_temperature_reduction_c=3`, `max_humidity_reduction_percent=10` |
 | Boden | `soil_moisture_on_percent=35`, `soil_moisture_off_percent=45`, `max_soil_threshold_increase_percent=5` |
 | Wasser | `watering_temperature_reference_c=25`, `watering_base_seconds=10`, `watering_min_seconds=5`, `watering_max_seconds=30`, `watering_cooldown_seconds=3600` |
+
+`soil_moisture_off_percent` begrenzt außerdem die maximal mögliche adaptive
+Einschaltschwelle. Es verriegelt keine Folgeimpulse.
 
 ## Parameter `adaptive_weather`
 
