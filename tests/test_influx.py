@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -126,7 +127,47 @@ class InfluxMappingTests(unittest.TestCase):
         self.assertIn("safety_override_count=1i", line)
         self.assertIn("diagnostic_watering_armed=true", line)
         self.assertIn("diagnostic_trends_per_minute_temperature=0.125", line)
+        self.assertIn("temperature_c=24.5", line)
+        self.assertIn("humidity_percent=61.0", line)
+        self.assertIn("soil1_percent=31.0", line)
+        self.assertNotIn("soil2_percent=", line)
+        self.assertIn("soil3_percent=48.5", line)
+        self.assertIn("light_percent=72.0", line)
+        self.assertIn("outside_temperature_c=19.0", line)
+        self.assertIn("outside_humidity_percent=70.0", line)
         self.assertNotIn("fresh variable text", line)
+
+    def test_control_omits_none_and_non_finite_sensor_values(self) -> None:
+        result = example_result()
+        snapshot = replace(
+            result.snapshot,
+            temperature_c=None,
+            humidity_percent=float("nan"),
+            soil_moisture_percent=(float("inf"), None, float("-inf")),
+            light_percent=float("inf"),
+            weather=replace(
+                result.snapshot.weather,
+                outside_temperature_c=float("nan"),
+                outside_humidity_percent=None,
+            ),
+        )
+        line = control_to_line(replace(result, snapshot=snapshot), "trial-42")
+        field_section = line.split(" ", 1)[1].rsplit(" ", 1)[0]
+        field_names = {
+            item.split("=", 1)[0] for item in field_section.split(",")
+        }
+
+        for field_name in (
+            "temperature_c",
+            "humidity_percent",
+            "soil1_percent",
+            "soil2_percent",
+            "soil3_percent",
+            "light_percent",
+            "outside_temperature_c",
+            "outside_humidity_percent",
+        ):
+            self.assertNotIn(field_name, field_names)
 
     def test_variable_event_text_is_a_field_and_never_a_tag(self) -> None:
         line = event_to_line(example_result(), "trial-42")

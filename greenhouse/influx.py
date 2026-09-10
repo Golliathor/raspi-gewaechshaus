@@ -229,7 +229,23 @@ def control_to_line(
     water_flow_ml_per_second: float = 0.0,
 ) -> str:
     transitions = set(result.transitions)
+    snapshot = result.snapshot
+    soil = list(snapshot.soil_moisture_percent[:3])
+    soil.extend([None] * (3 - len(soil)))
+    weather = snapshot.weather
     fields: dict[str, Any] = {
+        "temperature_c": _finite_float(snapshot.temperature_c),
+        "humidity_percent": _finite_float(snapshot.humidity_percent),
+        "soil1_percent": _finite_float(soil[0]),
+        "soil2_percent": _finite_float(soil[1]),
+        "soil3_percent": _finite_float(soil[2]),
+        "light_percent": _finite_float(snapshot.light_percent),
+        "outside_temperature_c": _finite_float(
+            weather.outside_temperature_c if weather else None
+        ),
+        "outside_humidity_percent": _finite_float(
+            weather.outside_humidity_percent if weather else None
+        ),
         "requested_exhaust": result.requested.exhaust,
         "requested_circulation": result.requested.circulation,
         "requested_watering_seconds": float(result.requested.watering_seconds),

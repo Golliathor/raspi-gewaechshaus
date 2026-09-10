@@ -119,6 +119,8 @@ Tags:
 
 Kern-Fields:
 
+- Innenklima, drei Bodenfeuchten, Licht sowie Außenklima des zugehörigen
+  Snapshots, jeweils nur bei endlichem numerischem Wert
 - angeforderte und angewendete Zustände von Abluft und Umluft
 - angeforderte und angewendete Bewässerungssekunden
 - `water_valve`, `watering_started_seconds`, `weather_available`
