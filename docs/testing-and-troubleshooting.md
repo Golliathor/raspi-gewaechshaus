@@ -1,5 +1,23 @@
 # Tests und Fehlerdiagnose
 
+## Dienstnamen dieser Installation
+
+Die Beispiele verwenden die für Neuinstallationen empfohlenen Namen
+`gewaechshaus-klima`, `gewaechshaus-automation`, `gewaechshaus-kamera` und
+`gewaechshaus-web`. Ältere Installationen können anders heißen. Die echten
+Namen und die Zuordnung laufender Python-Prozesse lassen sich ohne Änderung am
+System ermitteln:
+
+```bash
+systemctl list-unit-files --type=service | grep -Ei 'gewaechshaus|greenhouse|klima|camera'
+pgrep -af 'klima_logger.py|automation_daemon.py|camera_daemon.py|web/app.py'
+systemctl status <PID> --no-pager
+```
+
+`<PID>` ist dabei durch eine von `pgrep` ausgegebene Prozessnummer zu
+ersetzen. Niemals einen zweiten Automationsdienst starten, solange bereits ein
+`automation_daemon.py` läuft.
+
 ## Automatisierte Tests
 
 Gesamte Suite:
@@ -97,7 +115,7 @@ Prüfen:
 
 ```bash
 i2cdetect -y 1
-journalctl -u greenhouse-automation -n 100
+journalctl -u gewaechshaus-automation -n 100
 ```
 
 Danach:
@@ -117,7 +135,7 @@ Messwert. Der Safety-Layer verhindert dann Bewässerung.
 ```bash
 tail -n 5 "$GREENHOUSE_BASE_DIR/logs/klima.csv"
 cat "$GREENHOUSE_BASE_DIR/web/latest_climate.json"
-systemctl status greenhouse-climate
+systemctl status gewaechshaus-klima
 ```
 
 Zeitstempel, DHT-Verkabelung an GPIO 4 und Dienstlog prüfen. Bei ungültigen
@@ -125,7 +143,7 @@ Luftwerten fordert der Safety-Layer beide Lüfter AUS. Bei veraltetem Snapshot
 wird zuerst Bewässerung, später auch Lüftung abgeschaltet.
 
 Der Automationsdaemon durchsucht `klima.csv` nicht mehr. Fehlt
-`latest_climate.json`, zuerst `greenhouse-climate.service` neu starten. Nach
+`latest_climate.json`, zuerst `gewaechshaus-klima.service` neu starten. Nach
 einer erfolgreichen DHT22-Messung muss die Datei innerhalb des
 60-Sekunden-Messintervalls erscheinen.
 
@@ -143,6 +161,19 @@ auffallen. Wiederholte Aufrufe von `/api/status`, `/api/chart` und
 `/api/sensor_chart` dürfen ebenfalls keine vollständigen Logscans mehr
 auslösen. Kurzzeitige Lastspitzen durch Kameraaufnahme, DHT-Zugriff oder die
 periodische Tagesauswertung getrennt beurteilen.
+
+Zusätzlich prüfen, dass genau je ein Prozess läuft und die Live-Datei
+regelmäßig erneuert wird:
+
+```bash
+pgrep -af 'klima_logger.py|automation_daemon.py|camera_daemon.py|web/app.py'
+stat "$GREENHOUSE_BASE_DIR/web/latest_climate.json"
+```
+
+Auf einem Pi Zero W ist die absolute Last vom Sensorzugriff und von
+gleichzeitigen HTTP-Anfragen abhängig. Entscheidend ist, dass nach dem
+Einschwingen wieder klar messbare Idle-Zeit vorhanden ist und die CPU-Nutzung
+nicht mit der Größe der CSV-Historie wächst.
 
 ## Wetter fehlt
 
@@ -211,7 +242,7 @@ Dauer getrennt. Das Tageskonto wird um Mitternacht zurückgesetzt und liegt im
 date
 timedatectl status
 rpicam-still -o /tmp/test.jpg --timeout 1000
-systemctl status greenhouse-camera
+systemctl status gewaechshaus-kamera
 ```
 
 Die Anzeigezeit des letzten Bildes stammt aus der Dateiänderungszeit von
@@ -228,8 +259,8 @@ prüfen.
 ## Web-App nicht erreichbar
 
 ```bash
-systemctl status greenhouse-web
-journalctl -u greenhouse-web -n 100
+systemctl status gewaechshaus-web
+journalctl -u gewaechshaus-web -n 100
 ss -ltn | grep 8080
 curl -s http://127.0.0.1:8080/api/status
 ```

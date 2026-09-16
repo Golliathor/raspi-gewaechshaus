@@ -41,6 +41,26 @@ Der Daemon liest die lokalen ADC-Sensoren nur alle
 Laufzeitzustand. Eine Bewässerungsentscheidung wird nur alle
 `watering_check_interval_seconds` freigegeben.
 
+## Datei-I/O und CPU-Verhalten
+
+Zeitkritische Pfade dürfen nicht proportional zur Größe eines historischen
+Logs wachsen:
+
+- `klima_logger.py` schreibt den letzten gültigen Klimawert atomar nach
+  `latest_climate.json` und die Historie zusätzlich nach `klima.csv`.
+- `automation_daemon.py` liest pro Regelzyklus nur den kleinen Live-Snapshot,
+  niemals die vollständige Klimahistorie.
+- `/api/status` verwendet `state.json` beziehungsweise als Start-Fallback
+  `latest_climate.json`.
+- `/api/chart` und `/api/sensor_chart` lesen die angeforderte Zahl von Zeilen
+  rückwärts vom Dateiende und cachen unveränderte Antworten anhand von
+  Dateiidentität, Größe und Änderungszeit.
+
+Damit bleiben Regelzyklus und Dashboardzugriffe auch bei wachsenden CSV-Dateien
+im Wesentlichen konstant. Die CSV-Dateien bleiben dennoch die lokale
+Langzeitaufzeichnung und können vollständig heruntergeladen oder in Replay
+überführt werden.
+
 ## Domänenmodelle
 
 `greenhouse.models` definiert die gemeinsame Sprache:

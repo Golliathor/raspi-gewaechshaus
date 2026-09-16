@@ -46,6 +46,12 @@ Alle Prozesse müssen dieselbe Variable `GREENHOUSE_BASE_DIR` erhalten. Das
 Dashboard ist anschließend unter `http://<raspberry-pi>:8080` erreichbar.
 Für Dauerbetrieb wird systemd empfohlen.
 
+Die Unit-Namen werden von der jeweiligen Pi-Installation festgelegt. Die
+Dokumentation verwendet für neue Installationen `gewaechshaus-*`; vor Updates
+auf einem bestehenden Pi müssen die vorhandenen Namen ermittelt werden. So
+wird insbesondere kein zweiter Automationsdaemon parallel gestartet. Siehe
+[Installation, Hardware und systemd](docs/installation.md#vorhandene-dienste-zuerst-feststellen).
+
 > **Sicherheit:** Vor dem ersten Automatikbetrieb Relais, Ventil,
 > Durchflussrate, Sensorwerte und Abschaltgrenzen manuell prüfen. Die Web-App
 > hat keine Benutzeranmeldung und gehört nicht ungeschützt ins Internet.

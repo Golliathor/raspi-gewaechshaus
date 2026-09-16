@@ -122,6 +122,34 @@ deaktivieren. Das Wasserventil nur mit kontrollierter Wassermenge testen.
 
 ## Empfohlener systemd-Betrieb
 
+### Vorhandene Dienste zuerst feststellen
+
+Die Unit-Namen sind Teil der Installation und werden nicht vom Python-Code
+vorgegeben. Auf bestehenden GrowPi-Installationen heißt der
+Automationsdienst `gewaechshaus-automation.service`. Vor dem Anlegen oder
+Neustarten von Units deshalb immer zuerst die tatsächlich vorhandenen Namen
+ermitteln:
+
+```bash
+systemctl list-unit-files --type=service | grep -Ei 'gewaechshaus|greenhouse|klima|camera'
+pgrep -af 'klima_logger.py|automation_daemon.py|camera_daemon.py|web/app.py'
+systemctl cat gewaechshaus-automation.service
+```
+
+Alternativ lässt sich ein bereits laufender Prozess direkt zuordnen, wobei
+`<PID>` durch die angezeigte Prozessnummer ersetzt wird:
+
+```bash
+systemctl status <PID> --no-pager
+```
+
+Keine zweite Unit nur wegen eines abweichenden Namens anlegen. Zwei parallel
+laufende Automationsdaemons würden dieselben Relais und Zustandsdateien
+ansteuern. Die folgenden Namen sind die Konvention für eine Neuinstallation;
+bei einem bestehenden System werden dessen vorhandene Namen weiterverwendet.
+
+### Units neu anlegen
+
 Gemeinsame Umgebung in `/etc/default/greenhouse`:
 
 ```ini
@@ -153,31 +181,32 @@ KillSignal=SIGINT
 WantedBy=multi-user.target
 ```
 
-Dieses Muster als folgende Units anlegen und `Description`/`ExecStart`
-anpassen:
+`WorkingDirectory` und der vordere Teil von `ExecStart` müssen auf den
+tatsächlichen Checkout zeigen. Dieses Muster als folgende Units anlegen und
+`Description`/`ExecStart` anpassen:
 
 | Unit | Python-Programm |
 | --- | --- |
-| `greenhouse-climate.service` | `klima_logger.py` |
-| `greenhouse-automation.service` | `web/automation_daemon.py` |
-| `greenhouse-camera.service` | `web/camera_daemon.py` |
-| `greenhouse-web.service` | `web/app.py` |
+| `gewaechshaus-klima.service` | `klima_logger.py` |
+| `gewaechshaus-automation.service` | `web/automation_daemon.py` |
+| `gewaechshaus-kamera.service` | `web/camera_daemon.py` |
+| `gewaechshaus-web.service` | `web/app.py` |
 
 Danach:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now greenhouse-climate.service
-sudo systemctl enable --now greenhouse-automation.service
-sudo systemctl enable --now greenhouse-camera.service
-sudo systemctl enable --now greenhouse-web.service
+sudo systemctl enable --now gewaechshaus-klima.service
+sudo systemctl enable --now gewaechshaus-automation.service
+sudo systemctl enable --now gewaechshaus-kamera.service
+sudo systemctl enable --now gewaechshaus-web.service
 ```
 
 Status und Logs:
 
 ```bash
-systemctl status greenhouse-automation.service
-journalctl -u greenhouse-automation.service -f
+systemctl status gewaechshaus-automation.service
+journalctl -u gewaechshaus-automation.service -f
 ```
 
 Der Automationsdaemon schaltet in seinem regulären Beendigungspfad alle Relais
@@ -185,14 +214,33 @@ aus. Ein stromlos sicherer Hardwareaufbau bleibt trotzdem erforderlich.
 
 ## Update
 
+Vor dem ersten Update einmal die realen Unit- und Repository-Pfade mit den
+Befehlen im vorigen Abschnitt prüfen. Das folgende Beispiel verwendet den in
+dieser Dokumentation empfohlenen Checkout und die deutschen Unit-Namen:
+
 ```bash
 cd /home/grow/raspi-gewaechshaus
 git switch model/comparison
 git pull --ff-only
 .venv/bin/pip install -r web/requirements.txt
 .venv/bin/python -m unittest discover -v
-sudo systemctl restart greenhouse-climate greenhouse-automation greenhouse-camera greenhouse-web
+sudo systemctl restart gewaechshaus-klima gewaechshaus-automation gewaechshaus-kamera gewaechshaus-web
 ```
+
+Anschließend nicht nur den Exitstatus von `systemctl` beachten, sondern den
+laufenden Stand prüfen:
+
+```bash
+systemctl --no-pager --full status gewaechshaus-klima gewaechshaus-automation gewaechshaus-kamera gewaechshaus-web
+cat /home/grow/gewaechshaus-data/web/latest_climate.json
+curl -s http://127.0.0.1:8080/api/status
+ps -eo pid,comm,%cpu,%mem,etime --sort=-%cpu | head -20
+```
+
+Meldet `systemctl` „Unit ... not found“, wurde nicht die installierte Unit
+verwendet. Dann nicht rebooten, sondern die Namen wie oben beschrieben
+ermitteln und nur diese Dienste neu starten. Ein Reboot behebt keinen falschen
+Unit-Namen.
 
 Vor größeren Updates Konfiguration und Logs sichern:
 

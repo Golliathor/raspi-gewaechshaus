@@ -52,6 +52,13 @@ Hardwaredetails dürfen nicht in die Controllerlogik durchsickern. Für einen
 weiteren Wetteranbieter das `WeatherProvider.fetch(now)`-Protokoll
 implementieren und dieselben kanonischen Felder liefern.
 
+Wenn ein neues numerisches Snapshot-Feld auch in InfluxDB verfügbar sein
+soll, `snapshot_to_line()` und gegebenenfalls `control_to_line()` gemeinsam
+erweitern. Dazu Tests für gültige Zahlen sowie `None`, `NaN` und Infinity
+ergänzen. Variable Inhalte nicht als Tags modellieren; `source`,
+`controller_id` und `run_id` bleiben die kontrollierten Identitäten des
+`control`-Measurements.
+
 ## Tests aufbauen
 
 - Grenzwerte exakt unterhalb, auf und oberhalb testen.

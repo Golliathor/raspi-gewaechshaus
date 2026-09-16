@@ -102,6 +102,24 @@ curl -X POST http://localhost:8080/api/automation/toggle \
 `state.json` wird von Automations- und Kameradaemon verwendet. Schreibvorgänge
 erfolgen über temporäre Datei und atomisches Ersetzen.
 
+### Format des Klima-Live-Snapshots
+
+`latest_climate.json` wird nach jeder erfolgreichen DHT22-Messung vollständig
+und atomar ersetzt:
+
+```json
+{
+  "timestamp": "2026-09-08T00:45:00",
+  "temperature_c": 23.4,
+  "humidity_percent": 91.2
+}
+```
+
+Der Zeitstempel ist lokale Raspberry-Pi-Zeit im ISO-8601-Format. Die Datei
+enthält nur den letzten gültigen Messwert; die Historie bleibt in
+`logs/klima.csv`. Ein DHT-Lesefehler überschreibt den letzten gültigen Snapshot
+nicht. Sein Alter wird daher weiterhin korrekt von der Stale-Safety erkannt.
+
 `/api/status` liest das aktuelle Klima aus `state.json`, bei noch fehlendem
 Zustand direkt aus `latest_climate.json`, und scannt keine historische
 CSV-Datei. `/api/chart` und `/api/sensor_chart` lesen rückwärts nur die
@@ -215,8 +233,18 @@ Standardzuständen, verliert aber die laufende Versuchskontinuität.
 Bei systemd:
 
 ```bash
-sudo systemctl stop greenhouse-automation
+sudo systemctl stop gewaechshaus-automation
 ```
+
+Bei älteren Installationen kann die Unit anders heißen. Vorher mit
+folgendem Befehl den tatsächlichen Namen prüfen:
+
+```bash
+systemctl list-unit-files --type=service | grep -Ei 'gewaechshaus|greenhouse'
+```
+
+Läuft der Daemon ohne systemd, kann die Prozesszuordnung mit
+`pgrep -af automation_daemon.py` ermittelt werden.
 
 Danach Relaiszustände physisch prüfen. Vor Wartung an Ventil, Pumpe oder
 Netzspannung die Leistungsversorgung trennen.

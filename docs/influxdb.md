@@ -75,8 +75,17 @@ Danach InfluxDB über die Webseite aktivieren oder `enabled` in der Live-Datei
 setzen und den Dienst neu starten:
 
 ```bash
-sudo systemctl restart greenhouse-automation.service
+sudo systemctl restart gewaechshaus-automation.service
 ```
+
+Falls diese Unit nicht existiert, den installierten Namen mit
+folgendem Befehl ermitteln:
+
+```bash
+systemctl list-unit-files --type=service | grep -Ei 'gewaechshaus|greenhouse'
+```
+
+Nicht zusätzlich einen zweiten Automationsdienst anlegen.
 
 Eine beim Start fehlende oder leere Token-Datei deaktiviert nur InfluxDB. Nach
 dem späteren Anlegen der Datei den Dienst neu starten, damit der Token neu
@@ -119,8 +128,10 @@ Tags:
 
 Kern-Fields:
 
-- Innenklima, drei Bodenfeuchten, Licht sowie Außenklima des zugehörigen
-  Snapshots, jeweils nur bei endlichem numerischem Wert
+- `temperature_c`, `humidity_percent`
+- `soil1_percent`, `soil2_percent`, `soil3_percent`
+- `light_percent`
+- `outside_temperature_c`, `outside_humidity_percent`
 - angeforderte und angewendete Zustände von Abluft und Umluft
 - angeforderte und angewendete Bewässerungssekunden
 - `water_valve`, `watering_started_seconds`, `weather_available`
@@ -131,7 +142,11 @@ Kern-Fields:
 
 Numerische und boolesche Controllerdiagnosen werden mit dem Präfix
 `diagnostic_` als Fields abgelegt. Freie Diagnosetexte werden bewusst nicht in
-`control` übernommen.
+`control` übernommen. Die acht Sensorfelder werden mit `_finite_float()`
+normalisiert; `None`, `NaN` und unendliche Werte fehlen deshalb vollständig im
+Line Protocol. Tags und alle übrigen Fields bleiben davon unberührt. Dadurch
+kann eine Grafana-Abfrage Regelentscheidung und zugehörige Sensorlage aus
+demselben `control`-Punkt darstellen.
 
 ### Measurement `event`
 
